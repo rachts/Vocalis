@@ -1,0 +1,76 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Environment variables
+.env
+.env.local
+
+# =========================
+# JavaScript / Node.js
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+.out/
+.next/
+
+# =========================
+# Frontend frameworks
+# =========================
+.vercel/
+.netlify/
+
+# =========================
+# IDE / Editors
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Logs
+# =========================
+*.log
+
+# =========================
+# Cache / Temp
+# =========================
+.cache/
+.tmp/
+
+# =========================
+# Media / Generated assets
+# =========================
+*.mp4
+*.avi
+*.mov
+*.png
+*.jpg
+
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/

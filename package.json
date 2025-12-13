@@ -1,0 +1,54 @@
+{
+  "name": "vocalis",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI Voice Assistant - Created by Rachit",
+  "author": "Rachit",
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
+    "format": "prettier --write .",
+    "lint": "next lint",
+    "server": "node server.js",
+    "start": "next start",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@radix-ui/react-checkbox": "1.0.4",
+    "@radix-ui/react-dialog": "1.0.5",
+    "@radix-ui/react-slot": "latest",
+    "@radix-ui/react-tooltip": "1.0.7",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cors": "latest",
+    "date-fns": "latest",
+    "express": "latest",
+    "lucide-react": "^0.454.0",
+    "next": "15.1.6",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "recharts": "2.10.4",
+    "tailwind-merge": "^2.5.5",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "@types/cors": "2.8.17",
+    "@types/express": "4.17.21",
+    "@types/node": "^22",
+    "@types/react": "18.2.52",
+    "@types/react-dom": "18.2.18",
+    "autoprefixer": "10.4.20",
+    "concurrently": "8.2.2",
+    "eslint": "8.56.0",
+    "eslint-config-next": "15.1.6",
+    "postcss": "^8.5",
+    "prettier": "3.2.5",
+    "tailwindcss": "3.4.15",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
