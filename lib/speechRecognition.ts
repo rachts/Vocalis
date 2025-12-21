@@ -1,151 +1,137 @@
-interface SpeechRecognitionOptions {
-  continuous?: boolean
-  interimResults?: boolean
-  lang?: string
-  maxRetries?: number
-}
+"use client"
 
-interface SpeechRecognitionResultItem {
-  transcript: string
-  isFinal: boolean
-  confidence: number
-}
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
+import { format } from "date-fns"
 
-interface ISpeechRecognition {
-  continuous: boolean
-  interimResults: boolean
-  lang: string
-  start(): void
-  stop(): void
-  abort(): void
-  onresult: ((event: ISpeechRecognitionEvent) => void) | null
-  onerror: ((event: ISpeechRecognitionErrorEvent) => void) | null
-  onend: (() => void) | null
-}
+class VoiceAssistant {
+  private synth: SpeechSynthesis | null = null
 
-interface ISpeechRecognitionEvent {
-  results: {
-    [index: number]: {
-      [index: number]: {
-        transcript: string
-        confidence: number
-      }
-      isFinal: boolean
+  constructor() {
+    if (typeof window !== "undefined") {
+      this.synth = window.speechSynthesis
     }
-    length: number
+  }
+
+  speak(text: string) {
+    if (!this.synth) return
+
+    // Cancel any ongoing speech
+    this.synth.cancel()
+
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.rate = 1
+    utterance.pitch = 1
+    utterance.volume = 1
+
+    this.synth.speak(utterance)
+  }
+
+  cancel() {
+    if (this.synth) {
+      this.synth.cancel()
+    }
   }
 }
 
-interface ISpeechRecognitionErrorEvent {
-  error: string
+interface VoiceAssistantContextType {
+  isListening: boolean
+  isSpeaking: boolean
+  lastCommand: string
+  response: string
+  error: string | null
+  isOnline: boolean
+  debugInfo: string[]
+  startListening: () => void
+  stopListening: () => void
+  processTextCommand: (text: string) => Promise<void>
+  speak: (text: string) => void
+  cancel: () => void
 }
 
-type SpeechRecognitionConstructor = new () => ISpeechRecognition
+const VoiceAssistantContext = createContext<VoiceAssistantContextType | null>(null)
 
-function getSpeechRecognitionConstructor(): SpeechRecognitionConstructor | undefined {
-  if (typeof window === "undefined") return undefined
-
-  const win = window as unknown as {
-    SpeechRecognition?: SpeechRecognitionConstructor
-    webkitSpeechRecognition?: SpeechRecognitionConstructor
-  }
-
-  return win.SpeechRecognition || win.webkitSpeechRecognition
+const commands: Record<string, (args: string) => Promise<string>> = {
+  "what time is it": async () => `It's ${format(new Date(), "h:mm a")}`,
+  "what's the date": async () => `Today is ${format(new Date(), "EEEE, MMMM d, yyyy")}`,
+  "what's the weather": async () => "It's currently 27°C and sunny in your location",
+  "add todo": async (task) => `Added "${task}" to your todo list`,
+  "set reminder": async (reminder) => `Set a reminder for "${reminder}"`,
 }
 
-export class SpeechRecognitionWrapper {
-  private recognition: ISpeechRecognition | null = null
-  private isActive = false
-  private retryCount = 0
-  private maxRetries: number
+export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
+  const [isListening, setIsListening] = useState(false)
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const [lastCommand, setLastCommand] = useState("")
+  const [response, setResponse] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [isOnline, setIsOnline] = useState(true)
+  const [debugInfo, setDebugInfo] = useState<string[]>([])
+  const voiceAssistant = new VoiceAssistant()
 
-  constructor(options: SpeechRecognitionOptions = {}) {
-    this.maxRetries = options.maxRetries ?? 3
-
-    if (typeof window === "undefined") return
-
-    const SpeechRecognitionAPI = getSpeechRecognitionConstructor()
-    if (!SpeechRecognitionAPI) return
-
-    this.recognition = new SpeechRecognitionAPI()
-    this.recognition.continuous = options.continuous ?? false
-    this.recognition.interimResults = options.interimResults ?? false
-    this.recognition.lang = options.lang ?? "en-US"
-  }
-
-  isAvailable(): boolean {
-    return this.recognition !== null
-  }
-
-  start(
-    onResult: (result: SpeechRecognitionResultItem) => void,
-    onError: (error: string) => void
-  ): void {
-    if (!this.recognition) {
-      onError("Speech recognition not supported")
-      return
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => {
+      setIsOnline(false)
+      setError("You are offline. Please check your internet connection.")
     }
 
-    if (this.isActive) return
+    window.addEventListener("online", handleOnline)
+    window.addEventListener("offline", handleOffline)
 
-    this.recognition.onresult = (event: ISpeechRecognitionEvent) => {
-      const result = event.results[event.results.length - 1]
-      const transcript = result[0].transcript
-
-      onResult({
-        transcript,
-        isFinal: result.isFinal,
-        confidence: result[0].confidence,
-      })
-
-      this.retryCount = 0
+    return () => {
+      window.removeEventListener("online", handleOnline)
+      window.removeEventListener("offline", handleOffline)
     }
+  }, [])
 
-    this.recognition.onerror = (event: ISpeechRecognitionErrorEvent) => {
-      this.isActive = false
-
-      if (event.error === "no-speech" && this.retryCount < this.maxRetries) {
-        this.retryCount++
-        onError(`No speech detected. Retry ${this.retryCount}/${this.maxRetries}`)
-        setTimeout(() => this.start(onResult, onError), 1000)
+  const processTextCommand = async (text: string) => {
+    for (const [command, handler] of Object.entries(commands)) {
+      if (text.includes(command)) {
+        setLastCommand(text)
+        const assistantResponse = await handler(text.replace(command, "").trim())
+        setResponse(assistantResponse)
+        setError(null)
+        voiceAssistant.speak(assistantResponse)
         return
       }
-
-      onError(
-        event.error === "network"
-          ? "Network error. Please check your connection."
-          : `Speech recognition error: ${event.error}`
-      )
-
-      this.retryCount = 0
     }
-
-    this.recognition.onend = () => {
-      this.isActive = false
-    }
-
-    try {
-      this.recognition.start()
-      this.isActive = true
-    } catch {
-      onError("Failed to start speech recognition")
-      this.isActive = false
-    }
+    setResponse("I'm sorry, I didn't understand that command.")
   }
 
-  stop(): void {
-    if (this.recognition && this.isActive) {
-      this.recognition.stop()
-      this.isActive = false
-      this.retryCount = 0
-    }
+  const speak = (text: string) => {
+    voiceAssistant.speak(text)
   }
 
-  cleanup(): void {
-    if (this.recognition) {
-      this.recognition.abort()
-      this.isActive = false
-      this.retryCount = 0
-    }
+  const cancel = () => {
+    voiceAssistant.cancel()
   }
+
+  return (
+    <VoiceAssistantContext.Provider
+      value={{
+        isListening,
+        isSpeaking,
+        lastCommand,
+        response,
+        error,
+        isOnline,
+        debugInfo,
+        startListening: () => {},
+        stopListening: () => {},
+        processTextCommand,
+        speak,
+        cancel,
+      }}
+    >
+      {children}
+    </VoiceAssistantContext.Provider>
+  )
+}
+
+export function useVoiceAssistant() {
+  const context = useContext(VoiceAssistantContext)
+  if (!context) {
+    throw new Error("useVoiceAssistant must be used within a VoiceAssistantProvider")
+  }
+  return context
 }
