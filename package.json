@@ -27,6 +27,8 @@
     "clsx": "^2.1.1",
     "cors": "latest",
     "date-fns": "latest",
+    "embla-carousel": "^8.6.0",
+    "embla-carousel-react": "^8.6.0",
     "express": "latest",
     "lucide-react": "^0.454.0",
     "next": "^15.5.9",
