@@ -42,21 +42,14 @@ interface ISpeechRecognitionErrorEvent {
 
 type SpeechRecognitionConstructor = new () => ISpeechRecognition
 
-declare global {
-  interface Window {
-    webkitSpeechRecognition?: SpeechRecognitionConstructor
-  }
-}
-
 function getSpeechRecognitionConstructor(): SpeechRecognitionConstructor | undefined {
-  if (typeof window === "undefined") {
-    return undefined
-  }
-  // Use type assertion to access both standard and webkit-prefixed APIs
-  const win = window as Window & {
+  if (typeof window === "undefined") return undefined
+
+  const win = window as unknown as {
     SpeechRecognition?: SpeechRecognitionConstructor
     webkitSpeechRecognition?: SpeechRecognitionConstructor
   }
+
   return win.SpeechRecognition || win.webkitSpeechRecognition
 }
 
@@ -67,37 +60,33 @@ export class SpeechRecognitionWrapper {
   private maxRetries: number
 
   constructor(options: SpeechRecognitionOptions = {}) {
-    this.maxRetries = options.maxRetries || 3
+    this.maxRetries = options.maxRetries ?? 3
 
-    if (typeof window === "undefined") {
-      return
-    }
+    if (typeof window === "undefined") return
 
     const SpeechRecognitionAPI = getSpeechRecognitionConstructor()
-
-    if (!SpeechRecognitionAPI) {
-      return
-    }
+    if (!SpeechRecognitionAPI) return
 
     this.recognition = new SpeechRecognitionAPI()
-    this.recognition.continuous = options.continuous || false
-    this.recognition.interimResults = options.interimResults || false
-    this.recognition.lang = options.lang || "en-US"
+    this.recognition.continuous = options.continuous ?? false
+    this.recognition.interimResults = options.interimResults ?? false
+    this.recognition.lang = options.lang ?? "en-US"
   }
 
   isAvailable(): boolean {
     return this.recognition !== null
   }
 
-  start(onResult: (result: SpeechRecognitionResultItem) => void, onError: (error: string) => void): void {
+  start(
+    onResult: (result: SpeechRecognitionResultItem) => void,
+    onError: (error: string) => void
+  ): void {
     if (!this.recognition) {
       onError("Speech recognition not supported")
       return
     }
 
-    if (this.isActive) {
-      return
-    }
+    if (this.isActive) return
 
     this.recognition.onresult = (event: ISpeechRecognitionEvent) => {
       const result = event.results[event.results.length - 1]
@@ -122,11 +111,11 @@ export class SpeechRecognitionWrapper {
         return
       }
 
-      if (event.error === "network") {
-        onError("Network error. Please check your connection.")
-      } else {
-        onError(`Speech recognition error: ${event.error}`)
-      }
+      onError(
+        event.error === "network"
+          ? "Network error. Please check your connection."
+          : `Speech recognition error: ${event.error}`
+      )
 
       this.retryCount = 0
     }
@@ -138,7 +127,7 @@ export class SpeechRecognitionWrapper {
     try {
       this.recognition.start()
       this.isActive = true
-    } catch (err) {
+    } catch {
       onError("Failed to start speech recognition")
       this.isActive = false
     }
