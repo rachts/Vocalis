@@ -44,9 +44,20 @@ type SpeechRecognitionConstructor = new () => ISpeechRecognition
 
 declare global {
   interface Window {
+    webkitSpeechRecognition?: SpeechRecognitionConstructor
+  }
+}
+
+function getSpeechRecognitionConstructor(): SpeechRecognitionConstructor | undefined {
+  if (typeof window === "undefined") {
+    return undefined
+  }
+  // Use type assertion to access both standard and webkit-prefixed APIs
+  const win = window as Window & {
     SpeechRecognition?: SpeechRecognitionConstructor
     webkitSpeechRecognition?: SpeechRecognitionConstructor
   }
+  return win.SpeechRecognition || win.webkitSpeechRecognition
 }
 
 export class SpeechRecognitionWrapper {
@@ -62,7 +73,7 @@ export class SpeechRecognitionWrapper {
       return
     }
 
-    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition
+    const SpeechRecognitionAPI = getSpeechRecognitionConstructor()
 
     if (!SpeechRecognitionAPI) {
       return
