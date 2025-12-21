@@ -23,6 +23,7 @@
     "clsx": "^2.1.1",
     "cors": "latest",
     "date-fns": "latest",
+    "next-themes": "^0.3.0",
     "express": "latest",
     "lucide-react": "^0.454.0",
     "next": "^15.5.9",
