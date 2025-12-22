@@ -42,21 +42,13 @@ interface ISpeechRecognitionErrorEvent {
 
 type SpeechRecognitionConstructor = new () => ISpeechRecognition
 
-declare global {
-  interface Window {
-    webkitSpeechRecognition?: SpeechRecognitionConstructor
-  }
-}
-
 function getSpeechRecognitionConstructor(): SpeechRecognitionConstructor | undefined {
   if (typeof window === "undefined") {
     return undefined
   }
   // Use type assertion to access both standard and webkit-prefixed APIs
-  const win = window as Window & {
-    SpeechRecognition?: SpeechRecognitionConstructor
-    webkitSpeechRecognition?: SpeechRecognitionConstructor
-  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const win = window as any
   return win.SpeechRecognition || win.webkitSpeechRecognition
 }
 
