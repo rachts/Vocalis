@@ -1,12 +1,10 @@
 // Helper functions for speech recognition
 
-declare global {
-  interface Window {
-    SpeechRecognition: any // Changed from typeof SpeechRecognition to any
-    webkitSpeechRecognition: any // Changed from typeof SpeechRecognition to any
-  }
+interface SpeechRecognition {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
 }
-
 
 export function isSpeechRecognitionSupported(): boolean {
   return typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window)
@@ -18,8 +16,13 @@ export function createSpeechRecognition(): SpeechRecognition | null {
     return null
   }
 
-  const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition
-  const recognition = new SpeechRecognitionConstructor()
+  const SpeechRecognitionConstructor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+
+  if (!SpeechRecognitionConstructor) {
+    return null
+  }
+
+  const recognition = new SpeechRecognitionConstructor() as SpeechRecognition
 
   recognition.continuous = false
   recognition.interimResults = false
