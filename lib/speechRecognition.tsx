@@ -5,14 +5,55 @@ interface SpeechRecognitionOptions {
   maxRetries?: number
 }
 
-interface SpeechRecognitionResult {
+interface SpeechRecognitionResultItem {
   transcript: string
   isFinal: boolean
   confidence: number
 }
 
+interface ISpeechRecognition {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  start(): void
+  stop(): void
+  abort(): void
+  onresult: ((event: ISpeechRecognitionEvent) => void) | null
+  onerror: ((event: ISpeechRecognitionErrorEvent) => void) | null
+  onend: (() => void) | null
+}
+
+interface ISpeechRecognitionEvent {
+  results: {
+    [index: number]: {
+      [index: number]: {
+        transcript: string
+        confidence: number
+      }
+      isFinal: boolean
+    }
+    length: number
+  }
+}
+
+interface ISpeechRecognitionErrorEvent {
+  error: string
+}
+
+type SpeechRecognitionConstructor = new () => ISpeechRecognition
+
+function getSpeechRecognitionConstructor(): SpeechRecognitionConstructor | undefined {
+  if (typeof window === "undefined") {
+    return undefined
+  }
+  // Use type assertion to access both standard and webkit-prefixed APIs
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const win = window as any
+  return win.SpeechRecognition || win.webkitSpeechRecognition
+}
+
 export class SpeechRecognitionWrapper {
-  private recognition: SpeechRecognition | null = null
+  private recognition: ISpeechRecognition | null = null
   private isActive = false
   private retryCount = 0
   private maxRetries: number
@@ -24,8 +65,8 @@ export class SpeechRecognitionWrapper {
       return
     }
 
-    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition
-    
+    const SpeechRecognitionAPI = getSpeechRecognitionConstructor()
+
     if (!SpeechRecognitionAPI) {
       return
     }
@@ -40,10 +81,7 @@ export class SpeechRecognitionWrapper {
     return this.recognition !== null
   }
 
-  start(
-    onResult: (result: SpeechRecognitionResult) => void,
-    onError: (error: string) => void
-  ): void {
+  start(onResult: (result: SpeechRecognitionResultItem) => void, onError: (error: string) => void): void {
     if (!this.recognition) {
       onError("Speech recognition not supported")
       return
@@ -53,35 +91,35 @@ export class SpeechRecognitionWrapper {
       return
     }
 
-    this.recognition.onresult = (event: SpeechRecognitionEvent) => {
+    this.recognition.onresult = (event: ISpeechRecognitionEvent) => {
       const result = event.results[event.results.length - 1]
       const transcript = result[0].transcript
-      
+
       onResult({
         transcript,
         isFinal: result.isFinal,
-        confidence: result[0].confidence
+        confidence: result[0].confidence,
       })
-      
+
       this.retryCount = 0
     }
 
-    this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+    this.recognition.onerror = (event: ISpeechRecognitionErrorEvent) => {
       this.isActive = false
-      
+
       if (event.error === "no-speech" && this.retryCount < this.maxRetries) {
         this.retryCount++
         onError(`No speech detected. Retry ${this.retryCount}/${this.maxRetries}`)
         setTimeout(() => this.start(onResult, onError), 1000)
         return
       }
-      
+
       if (event.error === "network") {
         onError("Network error. Please check your connection.")
       } else {
         onError(`Speech recognition error: ${event.error}`)
       }
-      
+
       this.retryCount = 0
     }
 
@@ -112,12 +150,5 @@ export class SpeechRecognitionWrapper {
       this.isActive = false
       this.retryCount = 0
     }
-  }
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition?: any
-    webkitSpeechRecognition?: any
   }
 }
