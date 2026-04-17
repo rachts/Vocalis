@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import { Mic, ArrowRight, Bot, Zap, Globe, Sparkles, CheckCircle2, Layout, MessagesSquare, Code, Settings } from "lucide-react"
 import { FloatingMic } from "@/components/floating-mic"
 
