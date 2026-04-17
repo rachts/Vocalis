@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Mic, ArrowRight, Bot, Zap, Globe, Sparkles, CheckCircle2, Layout, MessagesSquare, Code, Settings } from "lucide-react"
+import { Mic, ArrowRight, Bot, Zap, Globe, Sparkles, CheckCircle2, Layout, MessagesSquare, Code, Settings, Loader2 } from "lucide-react"
 import { FloatingMic } from "@/components/floating-mic"
 
 export default function LandingPage() {
