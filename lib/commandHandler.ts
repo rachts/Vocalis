@@ -68,6 +68,37 @@ export async function handleCommand(
 ): Promise<CommandResult> {
   const trimmed = raw.trim()
 
+  // --- PHASE 1: Connect to the Python FastAPI Brain ---
+  try {
+    const res = await fetch("http://localhost:8000/process", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text: trimmed }),
+    })
+
+    if (res.ok) {
+      const data = await res.json()
+      
+      // Execute the requested action (if any)
+      if (data.action === "open_url" && typeof window !== "undefined") {
+        window.open(data.url, "_blank")
+      }
+      
+      // If Python successfully understood it, Return early.
+      return {
+        success: data.success,
+        response: data.response || "Task executed.",
+        action: data.action,
+      }
+    }
+  } catch (error) {
+    console.error("Vocalis Python Backend is unreachable. Falling back to static local handlers.", error)
+  }
+  // ---------------------------------------------------
+
+  // Fallback static matches
   if (commands.greeting.test(trimmed)) {
     return {
       success: true,

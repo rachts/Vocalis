@@ -6,27 +6,32 @@ import { Mic, Loader2, SquareTerminal } from "lucide-react"
 
 type MicState = "idle" | "listening" | "processing" | "responding"
 
-export function FloatingMic() {
-  const [state, setState] = useState<MicState>("idle")
-  const [isTextMode, setIsTextMode] = useState(false)
+import { useVoiceAssistant } from "@/contexts/voice-assistant-context"
 
+export function FloatingMic() {
+  const { isListening, isSpeaking, startListening, stopListening, error } = useVoiceAssistant()
+  const [isTextMode, setIsTextMode] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
+
+  // Derive UI state from the real context
+  let state = "idle"
+  if (isListening) state = "listening"
+  else if (isProcessing) state = "processing"
+  else if (isSpeaking) state = "responding"
+
+  // Temporary mock processing state listener (since context doesn't expose it yet)
   useEffect(() => {
-    let timeout: NodeJS.Timeout;
-    if (state === "listening") {
-      timeout = setTimeout(() => setState("processing"), 2500)
-    } else if (state === "processing") {
-      timeout = setTimeout(() => setState("responding"), 1500)
-    } else if (state === "responding") {
-      timeout = setTimeout(() => setState("idle"), 4000)
-    }
-    return () => clearTimeout(timeout)
-  }, [state])
+    if (isListening) setIsProcessing(true)
+    if (!isListening && isSpeaking) setIsProcessing(false)
+    if (!isListening && !isSpeaking) setIsProcessing(false)
+  }, [isListening, isSpeaking])
 
   return (
     <div className="fixed bottom-6 right-6 md:bottom-10 md:right-10 z-50 flex flex-col items-end gap-4">
       <AnimatePresence>
         {state !== "idle" && (
           <motion.div
+            key="mic-status-panel"
             initial={{ opacity: 0, y: 15, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.9 }}
@@ -98,7 +103,10 @@ export function FloatingMic() {
 
         {/* Mic Button */}
         <button
-          onClick={() => setState((s) => (s === "idle" ? "listening" : "idle"))}
+          onClick={() => {
+             if (state === "idle") startListening()
+             else stopListening()
+          }}
           className={`relative flex items-center justify-center w-16 h-16 rounded-full shadow-2xl transition-all duration-500 ease-out z-10 ${
             state === "idle"
               ? "bg-card border border-white/10 hover:border-primary/50 text-foreground/80 hover:text-white"

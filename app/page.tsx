@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Mic, ArrowRight, Bot, Zap, Globe, Sparkles, CheckCircle2, Layout, MessagesSquare, Code, Settings, Loader2 } from "lucide-react"
 import { FloatingMic } from "@/components/floating-mic"
+import Link from "next/link"
 
 export default function LandingPage() {
   const [mounted, setMounted] = useState(false)
@@ -21,8 +22,8 @@ export default function LandingPage() {
       {/* --- HEADER --- */}
       <header className="fixed top-0 w-full z-40 glass-panel border-b-0 border-white/5 py-4 px-6 md:px-12 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/50 flex items-center justify-center glow-primary">
-            <Mic className="w-5 h-5 text-primary" />
+          <div className="w-8 h-8 rounded-lg border border-primary/50 overflow-hidden flex items-center justify-center glow-primary shadow-[0_0_15px_rgba(99,102,241,0.5)]">
+            <img src="/logo.png" alt="Vocalis Icon" className="w-full h-full object-cover" />
           </div>
           <span className="text-xl font-bold tracking-tight">Vocalis</span>
         </div>
@@ -31,11 +32,11 @@ export default function LandingPage() {
           <a href="#demo" className="hover:text-foreground transition-colors">Live Demo</a>
           <a href="#use-cases" className="hover:text-foreground transition-colors">Use Cases</a>
         </nav>
-        <div className="flex items-center gap-4">
-          <a href="https://github.com/rachit-tiwari" target="_blank" rel="noreferrer" className="text-sm font-medium text-foreground/70 hover:text-foreground transition-colors">GitHub</a>
-          <button className="bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary px-4 py-2 rounded-full text-sm font-semibold transition-all hover:glow-primary">
+        <div className="flex items-center gap-4 relative z-50">
+          <Link href="https://github.com/rachts/Vocalis" target="_blank" rel="noreferrer" className="text-sm font-medium text-foreground/70 hover:text-foreground transition-colors cursor-pointer block">GitHub</Link>
+          <Link href="#demo" className="bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary px-4 py-2 rounded-full text-sm font-semibold transition-all hover:glow-primary cursor-pointer block">
             Get early access
-          </button>
+          </Link>
         </div>
       </header>
 
@@ -196,19 +197,20 @@ export default function LandingPage() {
       <footer className="border-t border-white/5 bg-card/10 py-12 px-6">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2">
-            <Mic className="w-5 h-5 text-primary" />
+            <img src="/logo.png" alt="Vocalis Icon" className="w-6 h-6 object-cover rounded-md" />
             <span className="font-bold text-lg">Vocalis.</span>
           </div>
           
-          <div className="flex gap-8 text-sm font-medium text-foreground/50">
-            <a href="#" className="hover:text-primary transition-colors">Privacy</a>
-            <a href="#" className="hover:text-primary transition-colors">Terms</a>
-            <a href="#" className="hover:text-primary transition-colors">Docs</a>
+          <div className="flex gap-8 text-sm font-medium text-foreground/50 relative z-50">
+            <Link href="/privacy" className="hover:text-primary transition-colors cursor-pointer block">Privacy</Link>
+            <Link href="/terms" className="hover:text-primary transition-colors cursor-pointer block">Terms</Link>
+            <Link href="/docs" className="hover:text-primary transition-colors cursor-pointer block">Docs</Link>
+            <Link href="https://github.com/rachts/Vocalis" target="_blank" className="hover:text-primary transition-colors cursor-pointer block">GitHub</Link>
           </div>
 
-          <div className="text-sm text-foreground/40 flex items-center gap-2">
+          <div className="text-sm text-foreground/40 flex items-center gap-2 relative z-50">
             <span>Built by </span>
-            <a href="https://github.com/rachit-tiwari" className="text-foreground/80 hover:text-primary transition-colors font-medium">Rachit Tiwari</a>
+            <Link href="https://github.com/rachts/Vocalis" target="_blank" className="text-foreground/80 hover:text-primary transition-colors font-medium cursor-pointer block">Rachts</Link>
             <span className="ml-2 px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-xs">v1 Beta</span>
           </div>
         </div>
@@ -291,6 +293,7 @@ function TypewriterChat() {
       <AnimatePresence mode="popLayout">
         {step >= 1 && (
           <motion.div
+            key="user-prompt"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="flex gap-3 items-start"
@@ -306,6 +309,7 @@ function TypewriterChat() {
         
         {step >= 2 && step < 3 && (
           <motion.div
+            key="processing-loader"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="flex gap-3 items-center ml-11 text-primary/60"
@@ -317,6 +321,7 @@ function TypewriterChat() {
 
         {step >= 3 && (
            <motion.div
+              key="vocalis-response"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               className="flex gap-3 items-start"

@@ -22,7 +22,9 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${inter.className} bg-background text-foreground antialiased selection:bg-primary/30`}>
-        {children}
+        <VoiceAssistantProvider>
+          {children}
+        </VoiceAssistantProvider>
       </body>
     </html>
   )
