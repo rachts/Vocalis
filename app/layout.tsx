@@ -20,9 +20,9 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
-        <VoiceAssistantProvider>{children}</VoiceAssistantProvider>
+    <html lang="en" className="dark">
+      <body className={`${inter.className} bg-background text-foreground antialiased selection:bg-primary/30`}>
+        {children}
       </body>
     </html>
   )
