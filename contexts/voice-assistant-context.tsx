@@ -1,8 +1,9 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react"
-import { SpeechRecognitionWrapper } from "@/lib/speechRecognition"
-import { TextToSpeechWrapper } from "@/lib/tts"
+import { WakeWordDetector } from "@/lib/audio/wakeWord"
+import { StreamingSTT } from "@/lib/audio/stt"
+import { TTSClient } from "@/lib/audio/tts"
 import { handleCommand, type CommandContext } from "@/lib/commandHandler"
 import type { LogEntry } from "@/components/terminal-logs"
 
@@ -18,6 +19,8 @@ interface VoiceAssistantContextType {
   stopListening: () => void
   processTextCommand: (text: string) => Promise<void>
   speak: (text: string) => void
+  isScreenShared: boolean
+  startScreenShare: () => Promise<void>
 }
 
 const VoiceAssistantContext = createContext<VoiceAssistantContextType | null>(null)
@@ -30,9 +33,15 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [isOnline, setIsOnline] = useState(true)
   const [logs, setLogs] = useState<LogEntry[]>([])
+  const [chatHistory, setChatHistory] = useState<any[]>([])
+  const [isScreenShared, setIsScreenShared] = useState(false)
   
-  const recognitionRef = useRef<SpeechRecognitionWrapper | null>(null)
-  const ttsRef = useRef<TextToSpeechWrapper | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  
+  const wakeWordRef = useRef<WakeWordDetector | null>(null)
+  const sttRef = useRef<StreamingSTT | null>(null)
+  const ttsRef = useRef<TTSClient | null>(null)
   const lastResponseRef = useRef<string>("")
 
   const addLog = useCallback((text: string, type: LogEntry["type"]) => {
@@ -90,64 +99,60 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  useEffect(() => {
-    if (typeof window === "undefined") return
-
-    recognitionRef.current = new SpeechRecognitionWrapper({
-      continuous: true, // We want continuous listening for wake words potentially or for not dropping
-      interimResults: false,
-      lang: "en-US",
-      maxRetries: 3,
-    })
-
-    ttsRef.current = new TextToSpeechWrapper()
-
-    const handleOnline = () => {
-      setIsOnline(true)
-      setError(null)
-      addLog("System online. Network connection stabilized.", "system")
-    }
-    const handleOffline = () => {
-      setIsOnline(false)
-      setError("You are offline. Please check your internet connection.")
-      addLog("System offline. Network connection lost.", "error")
-    }
-
-    window.addEventListener("online", handleOnline)
-    window.addEventListener("offline", handleOffline)
-
-    // Initial boot log
-    addLog("Vocalis Neural Net initialized. Awaiting input.", "system")
-
-    return () => {
-      recognitionRef.current?.cleanup()
-      ttsRef.current?.cancel()
-      window.removeEventListener("online", handleOnline)
-      window.removeEventListener("offline", handleOffline)
-    }
-  }, [addLog])
-
   const speak = useCallback((text: string, onEnd?: () => void) => {
-    if (!ttsRef.current?.isAvailable()) {
-      setError("Text-to-speech not supported")
-      if (onEnd) onEnd()
-      return
-    }
-
-    ttsRef.current.speak(
-      text,
-      {},
-      () => setIsSpeaking(true),
-      () => {
-        setIsSpeaking(false)
-        if (onEnd) onEnd()
-      },
-      (err) => {
-        setError(err)
-        if (onEnd) onEnd()
-      }
-    )
+    if (!ttsRef.current) return;
+    
+    setIsSpeaking(true);
+    ttsRef.current.speak(text, () => {
+      setIsSpeaking(false);
+      if (onEnd) onEnd();
+    }, (err) => {
+      setIsSpeaking(false);
+      setError("TTS Error: " + err.message);
+      if (onEnd) onEnd();
+    });
   }, [])
+
+  const startScreenShare = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      if (!videoRef.current) {
+        videoRef.current = document.createElement("video");
+      }
+      if (!canvasRef.current) {
+        canvasRef.current = document.createElement("canvas");
+      }
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+      setIsScreenShared(true);
+      addLog("Screen sharing started. Vision active.", "system");
+      
+      stream.getVideoTracks()[0].onended = () => {
+        setIsScreenShared(false);
+        addLog("Screen sharing ended.", "system");
+      };
+    } catch (e) {
+      console.error("Screen share error", e);
+    }
+  }, [addLog]);
+
+  const captureScreenFrame = useCallback(() => {
+    if (!isScreenShared || !videoRef.current || !canvasRef.current) return null;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    
+    if (video.videoWidth === 0 || video.videoHeight === 0) return null;
+    
+    // Scale down the image so we don't send huge base64 payload
+    canvas.width = 640;
+    canvas.height = (video.videoHeight / video.videoWidth) * 640;
+    
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.5); // 50% quality JPEG
+  }, [isScreenShared]);
 
   const getTodos = useCallback(() => {
     const saved = localStorage.getItem("vocalis-todos")
@@ -175,8 +180,10 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
     setLastCommand(text)
     setError(null)
     
-    // Check for Wake word if we want to filter (simplified for demo: assume any processed text is intentional)
     addLog(text, "user")
+    
+    const userMessage = { role: "user", parts: [{ text }] };
+    setChatHistory(prev => [...prev, userMessage]);
 
     const ctx: CommandContext = {
       speak,
@@ -185,6 +192,8 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
       clearTodos,
       addLog,
       lastResponse: lastResponseRef.current,
+      chatHistory: chatHistory,
+      imageBase64: captureScreenFrame() || undefined,
       getCurrentWeather: async () => "It's currently 27°C and sunny in your location.",
     }
 
@@ -197,65 +206,121 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
       if (result.success && result.response) {
         addLog(result.response, "system")
         playTone("done")
+        const aiMessage = { role: "model", parts: [{ text: result.response }] };
+        setChatHistory(prev => [...prev, aiMessage]);
       } else if (!result.success && result.response) {
         addLog(result.response, "error")
       }
       
-      // If the backend already handled speaking via stream, we might not need to speak here, but we will fallback
       if (!result.handledSpeech && result.response) {
          speak(result.response)
       }
+      
+      // Always ensure wake word is active after returning to idle
+      if (wakeWordRef.current) {
+        wakeWordRef.current.start();
+      }
     } catch (err: any) {
       addLog(`Internal execution error: ${err.message}`, "error")
+      if (wakeWordRef.current) {
+        wakeWordRef.current.start();
+      }
     }
-  }, [speak, addTodo, getTodos, clearTodos, addLog])
+  }, [speak, addTodo, getTodos, clearTodos, addLog, playTone, chatHistory])
 
   const startListening = useCallback(() => {
-    if (!recognitionRef.current?.isAvailable()) {
-      setError("Speech recognition not supported in this browser")
-      addLog("Speech recognition API is unavailable in this environment.", "error")
-      return
+    if (isListening) return;
+    
+    // Interruption logic: stop TTS if it is currently playing
+    if (ttsRef.current?.isActive()) {
+      ttsRef.current.stop();
+      setIsSpeaking(false);
+      addLog("Interrupted AI speech.", "system");
     }
-
-    if (isListening) return
+    
+    if (wakeWordRef.current) {
+      wakeWordRef.current.stop(); // Stop wake word while actively listening
+    }
 
     setIsListening(true)
     setError(null)
     addLog("Listening channel opened.", "system")
     playTone("start")
 
-    recognitionRef.current.start(
-      (result) => {
-        if (result.isFinal) {
-           const transcript = result.transcript.toLowerCase().trim()
-           // Basic Wake Word Filter if we want to run continuously:
-           // If it starts with "hey vocalis", strip it and process. Otherwise just process (assuming push-to-talk).
-           let cmd = result.transcript
-           if (transcript.startsWith("hey vocalis")) {
-              cmd = result.transcript.substring(11).trim()
-           }
-           if (cmd) {
-             processTextCommand(cmd)
-           }
-           // Stop listening after a command is processed unless we want true continuous. For now, stop to reset state properly.
-           stopListening()
-        }
-      },
-      (err) => {
-        setError(err)
-        setIsListening(false)
-        if (err !== "no-speech") {
-          addLog(`Voice channel error: ${err}`, "error")
-        }
-      }
-    )
-  }, [isListening, processTextCommand, addLog])
+    if (sttRef.current) {
+      sttRef.current.startListening();
+    }
+  }, [isListening, addLog, playTone])
 
   const stopListening = useCallback(() => {
-    recognitionRef.current?.stop()
+    if (sttRef.current) {
+      sttRef.current.stopListening();
+    }
     setIsListening(false)
     playTone("stop")
+    
+    if (wakeWordRef.current) {
+      wakeWordRef.current.start(); // Resume wake word after stopping STT manually
+    }
   }, [playTone])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    // Initialize the new hybrid audio pipeline
+    wakeWordRef.current = new WakeWordDetector();
+    sttRef.current = new StreamingSTT();
+    ttsRef.current = new TTSClient();
+
+    // 1. Initialize Wake Word
+    wakeWordRef.current.initialize(() => {
+      // On wake word detected
+      addLog("Wake word detected!", "system");
+      startListening(); // Trigger STT
+    }, (err) => {
+      console.error(err);
+      addLog("Wake word initialization failed.", "error");
+    }).then(() => {
+      wakeWordRef.current?.start(); // Start listening for wake word by default
+    });
+
+    // 2. Initialize STT
+    sttRef.current.initialize((text, isFinal) => {
+      if (isFinal && text.trim()) {
+        setIsListening(false);
+        sttRef.current?.stopListening();
+        processTextCommand(text);
+      }
+    }, (err) => {
+      setError(err);
+      setIsListening(false);
+      addLog(`STT Error: ${err}`, "error");
+    });
+
+    const handleOnline = () => {
+      setIsOnline(true)
+      setError(null)
+      addLog("System online. Network connection stabilized.", "system")
+    }
+    const handleOffline = () => {
+      setIsOnline(false)
+      setError("You are offline. Please check your internet connection.")
+      addLog("System offline. Network connection lost.", "error")
+    }
+
+    window.addEventListener("online", handleOnline)
+    window.addEventListener("offline", handleOffline)
+
+    addLog("Vocalis Neural Net Phase 1 initialized. Awaiting wake word.", "system")
+
+    return () => {
+      wakeWordRef.current?.release();
+      sttRef.current?.disconnect();
+      ttsRef.current?.stop();
+      window.removeEventListener("online", handleOnline)
+      window.removeEventListener("offline", handleOffline)
+    }
+  }, [addLog, processTextCommand, startListening])
 
   return (
     <VoiceAssistantContext.Provider
@@ -271,6 +336,8 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
         stopListening,
         processTextCommand,
         speak,
+        isScreenShared,
+        startScreenShare,
       }}
     >
       {children}

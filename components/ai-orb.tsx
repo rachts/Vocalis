@@ -43,7 +43,7 @@ export function AIOrb({ state }: { state: OrbState }) {
 
       {/* Core Orb */}
       <motion.div
-        animate={variants[state]} // Typescript warning is fine here if it complains, but we passed correct variants
+        animate={variants[state] as any} // Typescript warning is fine here if it complains, but we passed correct variants
         className="w-32 h-32 rounded-full bg-black border border-indigo-500 flex items-center justify-center relative overflow-hidden shadow-[0_0_40px_#6366F1]"
       >
          {/* Inner glowing pulse (subtle) */}
