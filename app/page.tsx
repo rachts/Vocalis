@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
-import { Mic, SquareTerminal, Settings } from "lucide-react"
+import { Mic, SquareTerminal, Settings, Eye, EyeOff } from "lucide-react"
 import { AIOrb } from "@/components/ai-orb"
 import { TerminalLogs } from "@/components/terminal-logs"
 import { useVoiceAssistant } from "@/contexts/voice-assistant-context"
@@ -10,7 +10,7 @@ import type { OrbState } from "@/components/ai-orb"
 
 export default function JarvisInterface() {
   const [mounted, setMounted] = useState(false)
-  const { isListening, isSpeaking, startListening, stopListening, logs, processTextCommand } = useVoiceAssistant()
+  const { isListening, isSpeaking, startListening, stopListening, logs, processTextCommand, isScreenShared, startScreenShare } = useVoiceAssistant()
   const [isTextMode, setIsTextMode] = useState(false)
   const [textInput, setTextInput] = useState("")
 
@@ -48,8 +48,20 @@ export default function JarvisInterface() {
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
             Vocalis Core Online
          </div>
-         
          <div className="flex items-center gap-4">
+           {/* Vision Toggle */}
+           <button 
+             onClick={() => !isScreenShared && startScreenShare()}
+             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide border border-white/10 bg-black/40 transition-colors ${
+               isScreenShared 
+                 ? "text-primary drop-shadow-[0_0_8px_rgba(99,102,241,0.5)] border-primary/50" 
+                 : "text-foreground/50 hover:text-foreground/80"
+             }`}
+           >
+             {isScreenShared ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+             Vision {isScreenShared ? "On" : "Off"}
+           </button>
+
            {/* Mode Toggle */}
            <div className="glass-panel px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide flex items-center gap-3 border border-white/10 bg-black/40">
              <button 

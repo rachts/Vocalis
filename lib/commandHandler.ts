@@ -13,6 +13,8 @@ export interface CommandContext {
   addLog?: (text: string, type: LogEntry["type"]) => void
   lastResponse?: string
   currentVoice?: string
+  chatHistory?: any[]
+  imageBase64?: string
 }
 
 export interface CommandResult {
@@ -22,125 +24,16 @@ export interface CommandResult {
   handledSpeech?: boolean
 }
 
-let globalNewsContext: { title: string, link: string, source: string }[] = []
-
-// Keep the local regex commands for simple fallback
-const commands = {
-  greeting: /^(hi|hello|hey|greetings)$/i,
-  time: /^(what\s+time\s+is\s+it|what'?s?\s+the\s+time|tell me the time|current time)$/i,
-  // ... omitting all fallbacks but keeping basic structure to prevent complete break if python fails
-}
-
 export async function handleCommand(
   raw: string,
   ctx: CommandContext
 ): Promise<CommandResult> {
   const trimmed = raw.trim()
+  const input = trimmed.toLowerCase()
 
   ctx.addLog?.("Interpreting intent...", "system")
 
-  // --- PHASE 1: Connect to the Python FastAPI Brain (Streaming JSON lines) ---
-  try {
-    const res = await fetch("http://localhost:8000/process", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ text: trimmed }),
-    })
-
-    if (res.ok && res.body) {
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      
-      let finalAction = ""
-      let finalResponse = ""
-      let finalTarget = ""
-      
-      let buffer = ""
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        
-        buffer += decoder.decode(value, { stream: true })
-        
-        // Split by newlines (assuming backend yields JSON per line)
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || "" // keep the last incomplete chunk in buffer
-        
-        for (const line of lines) {
-           if (!line.trim()) continue
-           try {
-              const chunk = JSON.parse(line)
-              
-              if (chunk.status) {
-                // If it's just a status update
-                ctx.addLog?.(chunk.status, "system")
-              }
-              
-              if (chunk.speech) {
-                // Speak narration immediately
-                ctx.speak(chunk.speech)
-                finalResponse += chunk.speech + " "
-              }
-              
-              if (chunk.action && chunk.action !== "processing") {
-                 finalAction = chunk.action
-                 if (chunk.target) finalTarget = chunk.target
-                 ctx.addLog?.(`Executing action: ${chunk.action} on ${chunk.target || 'target'}`, "action")
-              }
-              
-              if (chunk.url) {
-                 finalTarget = chunk.url
-              }
-              
-              if (chunk.intent === "news_fetch" && chunk.data) {
-                 globalNewsContext = chunk.data;
-                 chunk.data.forEach((item: any, index: number) => {
-                    setTimeout(() => {
-                        ctx.addLog?.(`${index + 1}. ${item.title}`, "system")
-                    }, index * 800)
-                 })
-              }
-           } catch {
-              // Ignore parse errors on malformed chunks, move on
-           }
-        }
-      }
-
-      // Process any remaining buffer
-      if (buffer.trim()) {
-         try {
-           const chunk = JSON.parse(buffer)
-           if (chunk.response) finalResponse = chunk.response
-           if (chunk.action) finalAction = chunk.action
-           if (chunk.url) finalTarget = chunk.url
-         } catch {}
-      }
-
-      // Execute Action
-      if (finalAction === "open_url" && typeof window !== "undefined" && finalTarget) {
-        window.open(finalTarget, "_blank")
-        ctx.addLog?.(`Opened: ${finalTarget}`, "action")
-      }
-
-      return {
-        success: true,
-        response: finalResponse.trim(),
-        action: finalAction,
-        handledSpeech: true // since we handle speaking inside the loop via chunk.speech
-      }
-    }
-  } catch (error) {
-    console.error("Vocalis Python Backend is unreachable or stream failed.", error)
-    ctx.addLog?.("Running locally...", "system")
-  }
-  // ---------------------------------------------------
-
-  // Fallback static matches
-  const input = trimmed.toLowerCase()
-
+  // Fast Path: Functional / Local Commands
   if (input.includes("time")) {
     return { success: true, response: `It's ${format(new Date(), "h:mm a")}` }
   }
@@ -154,18 +47,110 @@ export async function handleCommand(
     if (typeof window !== "undefined") window.open("https://news.google.com", "_blank")
     return { success: true, response: "Fetching latest news.", action: "open_news" }
   }
-
-  if (input.includes("open first") || input.includes("open the first news")) {
-    if (typeof window !== "undefined" && globalNewsContext.length > 0) {
-       window.open(globalNewsContext[0].link, "_blank")
-       return { success: true, response: "Launching article.", action: "open_news" }
-    } else {
-       return { success: false, response: "There's no active news context to open." }
+  
+  if (input.startsWith("add todo") || input.startsWith("remind me")) {
+    const todoTask = trimmed.replace(/^(add todo|remind me to)\s+/i, "");
+    if (todoTask && ctx.addTodo) {
+       ctx.addTodo(todoTask);
+       return { success: true, response: `Added ${todoTask} to your list.` };
     }
+  }
+
+  // Smart Path: Conversational AI via Gemini
+  try {
+    ctx.addLog?.("Routing to Conversational AI...", "system")
+    
+    // Process intent intercepts (Routines)
+    let processedPrompt = trimmed;
+    if (input.includes("good morning")) {
+      ctx.addLog?.("Running Good Morning Routine...", "system")
+      const todos = ctx.getTodos?.() || []
+      const weather = ctx.getCurrentWeather ? await ctx.getCurrentWeather() : "Weather unavailable."
+      processedPrompt = `The user just said "Good morning". Act as their personalized assistant. 
+      Acknowledge them, read their current weather: ${weather}, 
+      and tell them about their to-dos: ${todos.length > 0 ? todos.join(', ') : "No to-dos"}. 
+      Keep it conversational, cheerful, and brief.`
+    }
+
+    // Check if running on client or server to form correct URL
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
+    
+    const res = await fetch(`${apiUrl}/api/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ 
+        prompt: processedPrompt,
+        history: ctx.chatHistory || [],
+        imageBase64: ctx.imageBase64
+      }),
+    })
+
+    if (res.ok && res.body) {
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      
+      let buffer = ""
+      let sentenceBuffer = ""
+      let fullResponse = ""
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        
+        buffer += decoder.decode(value, { stream: true })
+        
+        const chunks = buffer.split('\n\n')
+        buffer = chunks.pop() || "" // Keep incomplete chunk in buffer
+        
+        for (const chunk of chunks) {
+          if (chunk.startsWith('data: ')) {
+            const dataStr = chunk.substring(6)
+            if (dataStr.trim() === '[DONE]') continue
+            
+            try {
+              const data = JSON.parse(dataStr)
+              if (data.text) {
+                sentenceBuffer += data.text
+                fullResponse += data.text
+                
+                // Match sentences by punctuation
+                const sentenceMatch = sentenceBuffer.match(/^(.*?[.!?]+)(\s+.*)?$/s)
+                if (sentenceMatch) {
+                  const sentence = sentenceMatch[1]
+                  const remainder = sentenceMatch[2] || ""
+                  
+                  // Yield sentence immediately to the TTS queue
+                  ctx.speak(sentence.trim())
+                  
+                  sentenceBuffer = remainder.trimStart()
+                }
+              }
+            } catch (e) {
+              console.error("Error parsing SSE data", e)
+            }
+          }
+        }
+      }
+      
+      // Flush remaining buffer
+      if (sentenceBuffer.trim()) {
+        ctx.speak(sentenceBuffer.trim())
+      }
+      
+      return {
+        success: true,
+        response: fullResponse.trim(),
+        handledSpeech: true 
+      }
+    }
+  } catch (error) {
+    console.error("Failed to reach conversational AI API.", error)
   }
 
   return {
     success: false,
-    response: "That command isn't available locally."
+    response: "I didn't understand that command, and the AI brain is currently offline."
   }
 }
