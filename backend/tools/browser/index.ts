@@ -1,43 +1,79 @@
-import puppeteer from 'puppeteer';
-import { SchemaType } from '@google/generative-ai';
 import { ITool } from '../base';
-import { Logger } from '../../utils/logger';
+import { SchemaType } from '@google/generative-ai';
+import puppeteer, { Browser, Page } from 'puppeteer';
 
-export const browserTool: ITool = {
-  name: "searchWebAndSummarize",
-  description: "Searches the web for up-to-date information, news, or facts and returns a summary of the top results. Use this when the user asks about current events or something you do not know.",
+let browserInstance: Browser | null = null;
+let activePage: Page | null = null;
+
+export const BrowserTool: ITool = {
+  name: 'browser',
+  description: 'Automate a headless web browser. Actions: "open" (opens url), "click" (clicks selector), "type" (types text in selector), "screenshot" (returns base64), "extract" (returns text content of selector or body).',
+  requiresPermission: false, // Could require permission if needed
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
-      query: {
+      action: {
         type: SchemaType.STRING,
-        description: "The search query to execute",
+        description: 'Action to perform: "open", "click", "type", "screenshot", "extract"',
       },
+      url: {
+        type: SchemaType.STRING,
+        description: 'URL for "open" action',
+      },
+      selector: {
+        type: SchemaType.STRING,
+        description: 'CSS Selector for "click", "type", or "extract"',
+      },
+      text: {
+        type: SchemaType.STRING,
+        description: 'Text for "type" action',
+      }
     },
-    required: ["query"],
+    required: ['action']
   },
-  requiresPermission: false,
-  execute: async (args: { query: string }) => {
-    let browser = null;
+  execute: async (args: any) => {
     try {
-      Logger.info(`BrowserAgent: Searching for "${args.query}"`);
-      browser = await puppeteer.launch({ headless: true });
-      const page = await browser.newPage();
-      
-      const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(args.query)}`;
-      await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
-      
-      const results = await page.evaluate(() => {
-        const nodes = Array.from(document.querySelectorAll('.result__snippet')).slice(0, 3);
-        return nodes.map((el, i) => `Result ${i+1}: ${el.textContent?.trim()}`).join('\n\n');
-      });
+      if (!browserInstance) {
+        browserInstance = await puppeteer.launch({ headless: true });
+      }
+      if (!activePage) {
+        activePage = await browserInstance.newPage();
+      }
 
-      return results || "No reliable search results found.";
-    } catch (err: any) {
-      Logger.error("Browser Agent Error:", err);
-      return `Error executing web search: ${err.message}`;
-    } finally {
-      if (browser) await browser.close();
+      switch (args.action) {
+        case 'open':
+          if (!args.url) return { success: false, error: 'url required' };
+          await activePage.goto(args.url, { waitUntil: 'networkidle2' });
+          return { success: true, message: `Opened ${args.url}` };
+          
+        case 'click':
+          if (!args.selector) return { success: false, error: 'selector required' };
+          await activePage.click(args.selector);
+          return { success: true, message: `Clicked ${args.selector}` };
+          
+        case 'type':
+          if (!args.selector || !args.text) return { success: false, error: 'selector and text required' };
+          await activePage.type(args.selector, args.text);
+          return { success: true, message: `Typed in ${args.selector}` };
+          
+        case 'screenshot':
+          const buffer = await activePage.screenshot({ encoding: 'base64' });
+          return { success: true, base64: buffer };
+          
+        case 'extract':
+          if (args.selector) {
+            const content = await activePage.$eval(args.selector, (el: any) => el.textContent);
+            return { success: true, content };
+          } else {
+            const content = await activePage.evaluate(() => document.body.innerText);
+            return { success: true, content };
+          }
+          
+        default:
+          return { success: false, error: 'Invalid browser action' };
+      }
+    } catch (e: any) {
+      return { success: false, error: e.message };
     }
   }
 };

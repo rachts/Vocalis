@@ -25,10 +25,13 @@ export function handleSTTConnection(socket: Socket) {
           // deepgram returns a buffer or string
           const response = JSON.parse(data.toString());
           if (response.channel && response.channel.alternatives && response.channel.alternatives.length > 0) {
-            const transcript = response.channel.alternatives[0].transcript;
+            const alternative = response.channel.alternatives[0];
+            const transcript = alternative.transcript;
             const isFinal = response.is_final;
+            const confidence = alternative.confidence || 0;
+            
             if (transcript) {
-              socket.emit('transcript', { text: transcript, isFinal });
+              socket.emit('transcript', { text: transcript, isFinal, confidence });
             }
           }
         } catch (e) {

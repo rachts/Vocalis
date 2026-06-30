@@ -15,6 +15,7 @@ export interface CommandContext {
   currentVoice?: string
   chatHistory?: any[]
   imageBase64?: string
+  onServerEvent?: (event: string, payload: any) => void
 }
 
 export interface CommandResult {
@@ -111,7 +112,30 @@ export async function handleCommand(
             
             try {
               const data = JSON.parse(dataStr)
-              if (data.text) {
+              
+              if (data.event) {
+                // Structured Event Payload
+                ctx.onServerEvent?.(data.event, data.payload)
+                
+                if (data.event === 'text_stream' && data.payload.text) {
+                  const chunkText = data.payload.text
+                  sentenceBuffer += chunkText
+                  fullResponse += chunkText
+                  
+                  // Match sentences by punctuation
+                  const sentenceMatch = sentenceBuffer.match(/^(.*?[.!?]+)(\s+.*)?$/s)
+                  if (sentenceMatch) {
+                    const sentence = sentenceMatch[1]
+                    const remainder = sentenceMatch[2] || ""
+                    
+                    // Yield sentence immediately to the TTS queue
+                    ctx.speak(sentence.trim())
+                    
+                    sentenceBuffer = remainder.trimStart()
+                  }
+                }
+              } else if (data.text) {
+                // Fallback for old simple text payload
                 sentenceBuffer += data.text
                 fullResponse += data.text
                 

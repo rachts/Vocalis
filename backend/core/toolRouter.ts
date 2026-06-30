@@ -46,8 +46,15 @@ class ToolRouter {
     }
 
     try {
-      // Permission check will go here eventually
-      // For now we just execute
+      if (tool.requiresPermission) {
+        // Import must be added to top of file
+        const { permissionManager } = await import('../permissions/manager');
+        const granted = await permissionManager.requestPermission(name, args);
+        if (!granted) {
+          Logger.info(`Permission denied for tool: ${name}`);
+          return { error: `Permission denied by user for action: ${name}` };
+        }
+      }
 
       Logger.info(`Executing tool: ${name}`, args);
       const result = await tool.execute(args);

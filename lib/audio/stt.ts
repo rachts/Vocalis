@@ -1,20 +1,43 @@
 import { io, Socket } from "socket.io-client";
+import { micManager } from "./mic-manager";
 
 export class StreamingSTT {
   private socket: Socket | null = null;
   private mediaRecorder: MediaRecorder | null = null;
-  private audioStream: MediaStream | null = null;
   private isRecording = false;
+  private reconnectAttempts = 0;
 
   initialize(
-    onTranscript: (text: string, isFinal: boolean) => void,
+    onTranscript: (text: string, isFinal: boolean, confidence: number) => void,
     onError: (err: string) => void
   ) {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-    this.socket = io(apiUrl);
+    this.socket = io(apiUrl, {
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
+    });
 
     this.socket.on("connect", () => {
       console.log("Connected to STT proxy via WebSocket");
+      this.reconnectAttempts = 0;
+    });
+
+    this.socket.on("disconnect", (reason) => {
+      console.warn("STT WebSocket disconnected:", reason);
+      if (reason === "io server disconnect") {
+        this.socket?.connect(); // Reconnect manually if server disconnected
+      }
+    });
+
+    this.socket.on("connect_error", (error) => {
+      this.reconnectAttempts++;
+      console.error("STT WebSocket connection error:", error);
+      if (this.reconnectAttempts > 3) {
+        onError("STT connection failing. Trying to reconnect...");
+      }
     });
 
     this.socket.on("stt-ready", () => {
@@ -22,8 +45,8 @@ export class StreamingSTT {
       this.startMicrophone();
     });
 
-    this.socket.on("transcript", (data: { text: string; isFinal: boolean }) => {
-      onTranscript(data.text, data.isFinal);
+    this.socket.on("transcript", (data: { text: string; isFinal: boolean; confidence?: number }) => {
+      onTranscript(data.text, data.isFinal, data.confidence || 0);
     });
 
     this.socket.on("stt-error", (err: string) => {
@@ -42,10 +65,16 @@ export class StreamingSTT {
 
   private async startMicrophone() {
     try {
-      this.audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioStream = await micManager.acquire();
       
-      this.mediaRecorder = new MediaRecorder(this.audioStream, {
-        mimeType: "audio/webm",
+      // Safari fallback
+      let mimeType = "audio/webm";
+      if (!MediaRecorder.isTypeSupported("audio/webm") && MediaRecorder.isTypeSupported("audio/mp4")) {
+        mimeType = "audio/mp4";
+      }
+
+      this.mediaRecorder = new MediaRecorder(audioStream, {
+        mimeType,
       });
 
       this.mediaRecorder.ondataavailable = (event) => {
@@ -64,24 +93,25 @@ export class StreamingSTT {
 
   stopListening() {
     if (this.mediaRecorder && this.isRecording) {
-      this.mediaRecorder.stop();
+      try {
+        this.mediaRecorder.stop();
+      } catch (e) {}
       this.isRecording = false;
     }
 
-    if (this.audioStream) {
-      this.audioStream.getTracks().forEach((track) => track.stop());
-      this.audioStream = null;
-    }
-
-    if (this.socket) {
+    if (this.socket && this.socket.connected) {
       this.socket.emit("stop-stt");
     }
+    
+    // We do NOT release the micManager here because VAD might still need it 
+    // or it's handled by the context cleanup. 
     
     console.log("Stopped listening");
   }
 
   disconnect() {
     this.stopListening();
+    micManager.release(); // Fully release mic resources
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;

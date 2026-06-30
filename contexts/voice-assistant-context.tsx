@@ -1,20 +1,26 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from "react"
-import { WakeWordDetector } from "@/lib/audio/wakeWord"
-import { StreamingSTT } from "@/lib/audio/stt"
-import { TTSClient } from "@/lib/audio/tts"
+import { VoiceStateMachine, type VoiceState } from "@/lib/fsm/voice-state-machine"
 import { handleCommand, type CommandContext } from "@/lib/commandHandler"
 import type { LogEntry } from "@/components/terminal-logs"
+import { audioSessionManager } from "@/lib/audio/session-manager"
+import { io, Socket } from "socket.io-client"
+import { PermissionModal } from "@/components/permission-modal"
 
 interface VoiceAssistantContextType {
-  isListening: boolean
-  isSpeaking: boolean
+  fsmState: VoiceState
+  isListening: boolean // derived
+  isSpeaking: boolean // derived
   lastCommand: string
   response: string
   error: string | null
   isOnline: boolean
   logs: LogEntry[]
+  executionPlan: any | null
+  toolExecutions: any[]
+  executionTimeline: any[]
+  chatHistory: any[]
   startListening: () => void
   stopListening: () => void
   processTextCommand: (text: string) => Promise<void>
@@ -26,8 +32,9 @@ interface VoiceAssistantContextType {
 const VoiceAssistantContext = createContext<VoiceAssistantContextType | null>(null)
 
 export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
-  const [isListening, setIsListening] = useState(false)
-  const [isSpeaking, setIsSpeaking] = useState(false)
+  const [fsmState, setFsmState] = useState<VoiceState>("idle")
+  const fsmRef = useRef(new VoiceStateMachine("idle"))
+  
   const [lastCommand, setLastCommand] = useState("")
   const [response, setResponse] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -35,14 +42,20 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [chatHistory, setChatHistory] = useState<any[]>([])
   const [isScreenShared, setIsScreenShared] = useState(false)
+
+  // Phase 4 execution pipeline state
+  const [executionPlan, setExecutionPlan] = useState<any | null>(null)
+  const [toolExecutions, setToolExecutions] = useState<any[]>([])
+  const [executionTimeline, setExecutionTimeline] = useState<any[]>([])
   
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   
-  const wakeWordRef = useRef<WakeWordDetector | null>(null)
-  const sttRef = useRef<StreamingSTT | null>(null)
-  const ttsRef = useRef<TTSClient | null>(null)
   const lastResponseRef = useRef<string>("")
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const systemSocketRef = useRef<Socket | null>(null)
+
+  const [permissionRequest, setPermissionRequest] = useState<{ requestId: string, toolName: string, args: any } | null>(null)
 
   const addLog = useCallback((text: string, type: LogEntry["type"]) => {
     setLogs(prev => {
@@ -52,8 +65,17 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const audioCtxRef = useRef<AudioContext | null>(null)
-  
+  // Transition helper that updates React state
+  const transition = useCallback((newState: VoiceState) => {
+    if (fsmRef.current.transitionTo(newState)) {
+      setFsmState(newState)
+      addLog(`[FSM] -> ${newState}`, "system")
+      
+      // Track latency timeline on transitions
+      setExecutionTimeline(prev => [...prev, { timestamp: new Date().toISOString(), text: `State: ${newState}`, type: 'stage' }])
+    }
+  }, [addLog])
+
   const playTone = useCallback((type: "start" | "stop" | "done") => {
     try {
       if (!audioCtxRef.current) {
@@ -100,18 +122,20 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const speak = useCallback((text: string, onEnd?: () => void) => {
-    if (!ttsRef.current) return;
+    transition("speaking");
+    // Start Wake Word in barge-in mode so we can interrupt
+    audioSessionManager.startWakeWord(true);
     
-    setIsSpeaking(true);
-    ttsRef.current.speak(text, () => {
-      setIsSpeaking(false);
+    audioSessionManager.speak(text, () => {
+      transition("idle");
+      audioSessionManager.startWakeWord(false); // return to normal wake word
       if (onEnd) onEnd();
     }, (err) => {
-      setIsSpeaking(false);
+      transition("error");
       setError("TTS Error: " + err.message);
       if (onEnd) onEnd();
     });
-  }, [])
+  }, [transition])
 
   const startScreenShare = useCallback(async () => {
     try {
@@ -143,7 +167,6 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
     
     if (video.videoWidth === 0 || video.videoHeight === 0) return null;
     
-    // Scale down the image so we don't send huge base64 payload
     canvas.width = 640;
     canvas.height = (video.videoHeight / video.videoWidth) * 640;
     
@@ -151,7 +174,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
     if (!ctx) return null;
     
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.5); // 50% quality JPEG
+    return canvas.toDataURL("image/jpeg", 0.5);
   }, [isScreenShared]);
 
   const getTodos = useCallback(() => {
@@ -195,6 +218,19 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
       chatHistory: chatHistory,
       imageBase64: captureScreenFrame() || undefined,
       getCurrentWeather: async () => "It's currently 27°C and sunny in your location.",
+      onServerEvent: (event, payload) => {
+        if (event === 'stage_change') {
+          if (payload.stage === 'planning') transition("planning");
+          if (payload.stage === 'executing') transition("executing");
+          if (payload.stage === 'generating') transition("generating_response");
+        } else if (event === 'plan_created') {
+          setExecutionPlan(payload.plan)
+        } else if (event === 'tool_start') {
+          setToolExecutions(prev => [...prev, { id: payload.id, toolName: payload.toolName, status: 'running', args: payload.args }])
+        } else if (event === 'tool_end') {
+          setToolExecutions(prev => prev.map(t => t.id === payload.id ? { ...t, status: payload.error ? 'error' : 'success', result: payload.result, error: payload.error } : t))
+        }
+      }
     }
 
     try {
@@ -210,91 +246,96 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
         setChatHistory(prev => [...prev, aiMessage]);
       } else if (!result.success && result.response) {
         addLog(result.response, "error")
+        transition("error")
       }
       
       if (!result.handledSpeech && result.response) {
          speak(result.response)
-      }
-      
-      // Always ensure wake word is active after returning to idle
-      if (wakeWordRef.current) {
-        wakeWordRef.current.start();
+      } else {
+         transition("idle")
+         audioSessionManager.startWakeWord(false);
       }
     } catch (err: any) {
       addLog(`Internal execution error: ${err.message}`, "error")
-      if (wakeWordRef.current) {
-        wakeWordRef.current.start();
-      }
+      transition("error")
+      setTimeout(() => {
+        transition("idle")
+        audioSessionManager.startWakeWord(false);
+      }, 3000)
     }
-  }, [speak, addTodo, getTodos, clearTodos, addLog, playTone, chatHistory])
-
-  const startListening = useCallback(() => {
-    if (isListening) return;
-    
-    // Interruption logic: stop TTS if it is currently playing
-    if (ttsRef.current?.isActive()) {
-      ttsRef.current.stop();
-      setIsSpeaking(false);
-      addLog("Interrupted AI speech.", "system");
-    }
-    
-    if (wakeWordRef.current) {
-      wakeWordRef.current.stop(); // Stop wake word while actively listening
-    }
-
-    setIsListening(true)
-    setError(null)
-    addLog("Listening channel opened.", "system")
-    playTone("start")
-
-    if (sttRef.current) {
-      sttRef.current.startListening();
-    }
-  }, [isListening, addLog, playTone])
+  }, [speak, addTodo, getTodos, clearTodos, addLog, playTone, chatHistory, transition, captureScreenFrame])
 
   const stopListening = useCallback(() => {
-    if (sttRef.current) {
-      sttRef.current.stopListening();
-    }
-    setIsListening(false)
-    playTone("stop")
+    audioSessionManager.stopListening();
+    transition("transcribing");
+    playTone("stop");
+  }, [playTone, transition])
+
+  const startListening = useCallback(() => {
+    if (fsmRef.current.is("recording")) return;
     
-    if (wakeWordRef.current) {
-      wakeWordRef.current.start(); // Resume wake word after stopping STT manually
+    // Interruption / Barge-in logic: stop TTS if it is currently playing
+    if (fsmRef.current.is("speaking")) {
+      audioSessionManager.stopSpeaking();
+      addLog("Interrupted AI speech (Barge-In).", "system");
     }
-  }, [playTone])
+    
+    audioSessionManager.stopWakeWord();
+    
+    transition("recording");
+    setError(null);
+    addLog("Listening channel opened.", "system");
+    playTone("start");
+
+    audioSessionManager.startListening(
+      () => console.log("VAD: Speech started"),
+      () => {
+        console.log("VAD: Speech ended (silence detected)");
+        stopListening();
+      }
+    );
+  }, [addLog, playTone, transition, stopListening])
 
   useEffect(() => {
     if (typeof window === "undefined") return
 
-    // Initialize the new hybrid audio pipeline
-    wakeWordRef.current = new WakeWordDetector();
-    sttRef.current = new StreamingSTT();
-    ttsRef.current = new TTSClient();
-
-    // 1. Initialize Wake Word
-    wakeWordRef.current.initialize(() => {
-      // On wake word detected
-      addLog("Wake word detected!", "system");
-      startListening(); // Trigger STT
-    }, (err) => {
-      console.error(err);
-      addLog("Wake word initialization failed.", "error");
-    }).then(() => {
-      wakeWordRef.current?.start(); // Start listening for wake word by default
-    });
-
-    // 2. Initialize STT
-    sttRef.current.initialize((text, isFinal) => {
-      if (isFinal && text.trim()) {
-        setIsListening(false);
-        sttRef.current?.stopListening();
-        processTextCommand(text);
+    // Initialize Audio Session Manager
+    audioSessionManager.initialize(
+      () => {
+        transition("wake_detected");
+        addLog("Wake word detected!", "system");
+        startListening();
+      },
+      (text, isFinal, confidence) => {
+        if (isFinal && text.trim()) {
+          audioSessionManager.stopListening();
+          transition("transcribing");
+          
+          if (confidence < 0.65) {
+             addLog(`Low confidence (${Math.round(confidence*100)}%). Asking for clarification.`, "system");
+             speak("I didn't quite catch that. Could you repeat it?");
+             return;
+          }
+          
+          processTextCommand(text);
+        }
+      },
+      (err) => {
+        setError(err);
+        transition("error");
+        addLog(`STT Error: ${err}`, "error");
+        setTimeout(() => {
+          transition("idle");
+          audioSessionManager.startWakeWord(false);
+        }, 3000)
+      },
+      (err) => {
+        console.error(err);
+        addLog("Wake word initialization failed.", "error");
       }
-    }, (err) => {
-      setError(err);
-      setIsListening(false);
-      addLog(`STT Error: ${err}`, "error");
+    ).then(() => {
+      transition("idle");
+      audioSessionManager.startWakeWord(false);
     });
 
     const handleOnline = () => {
@@ -311,20 +352,53 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
     window.addEventListener("online", handleOnline)
     window.addEventListener("offline", handleOffline)
 
-    addLog("Vocalis Neural Net Phase 1 initialized. Awaiting wake word.", "system")
+    // System WebSocket for Permissions & Notifications
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+    systemSocketRef.current = io(apiUrl);
+    
+    systemSocketRef.current.on('PermissionRequested', (payload: any) => {
+      addLog(`Permission required for ${payload.toolName}. Waiting for user approval.`, 'system');
+      setPermissionRequest(payload);
+    });
+
+    systemSocketRef.current.on('NotificationTriggered', (payload: any) => {
+       addLog(`[Notification] ${payload.title}: ${payload.message}`, 'system');
+    });
+
+    systemSocketRef.current.on('BackgroundJobCompleted', (payload: any) => {
+       addLog(`[Job] Background Job ${payload.id} completed.`, 'system');
+    });
+
+    addLog("Vocalis OS Phase 7 initialized. Productivity tools active.", "system")
 
     return () => {
-      wakeWordRef.current?.release();
-      sttRef.current?.disconnect();
-      ttsRef.current?.stop();
+      audioSessionManager.releaseAll();
       window.removeEventListener("online", handleOnline)
       window.removeEventListener("offline", handleOffline)
+      if (systemSocketRef.current) systemSocketRef.current.disconnect();
     }
-  }, [addLog, processTextCommand, startListening])
+  }, [addLog, processTextCommand, startListening, transition])
+
+  const isListening = fsmState === "recording" || fsmState === "transcribing" || fsmState === "wake_detected"
+  const isSpeaking = fsmState === "speaking"
+
+  const handlePermissionResponse = useCallback((granted: boolean, scope: 'ONCE' | 'SESSION') => {
+    if (permissionRequest && systemSocketRef.current) {
+      systemSocketRef.current.emit('permission_response', {
+        requestId: permissionRequest.requestId,
+        toolName: permissionRequest.toolName,
+        granted,
+        scope
+      });
+      addLog(`Permission ${granted ? 'granted' : 'denied'} for ${permissionRequest.toolName} (${scope})`, 'system');
+      setPermissionRequest(null);
+    }
+  }, [permissionRequest, addLog]);
 
   return (
     <VoiceAssistantContext.Provider
       value={{
+        fsmState,
         isListening,
         isSpeaking,
         lastCommand,
@@ -332,15 +406,25 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
         error,
         isOnline,
         logs,
+        executionPlan,
+        toolExecutions,
+        executionTimeline,
+        chatHistory,
         startListening,
         stopListening,
         processTextCommand,
         speak,
         isScreenShared,
-        startScreenShare,
+        startScreenShare
       }}
     >
       {children}
+      <PermissionModal
+        isOpen={permissionRequest !== null}
+        toolName={permissionRequest?.toolName || ""}
+        args={permissionRequest?.args || {}}
+        onRespond={handlePermissionResponse}
+      />
     </VoiceAssistantContext.Provider>
   )
 }

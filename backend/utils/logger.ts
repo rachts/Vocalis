@@ -9,6 +9,10 @@ export class Logger {
     console.error(`[ERROR] ${new Date().toISOString()} - ${message}`, error || '');
   }
 
+  static warn(message: string, context?: any) {
+    console.warn(`[WARN] ${new Date().toISOString()} - ${message}`, context || '');
+  }
+
   static metric(name: string, durationMs: number) {
     console.log(`[METRIC] ${name}: ${durationMs}ms`);
     eventBus.emit(SystemEvents.LatencyMetric, { name, durationMs });

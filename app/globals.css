@@ -4,58 +4,57 @@
 
 @layer base {
   :root {
-    --background: 0 0% 4%; /* #0A0A0A */
-    --foreground: 0 0% 98%;
+    --background: 0 3% 8%; /* #141313 */
+    --foreground: 20 7% 89%; /* #e5e2e1 */
 
-    --card: 0 0% 6%;
-    --card-foreground: 0 0% 98%;
+    --card: 0 3% 8%;
+    --card-foreground: 20 7% 89%;
 
-    --popover: 0 0% 6%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 0 0% 12%; /* #1c1b1b */
+    --popover-foreground: 20 7% 89%;
 
-    --primary: 234 89% 67%; /* Indigo #6366F1 */
-    --primary-foreground: 0 0% 100%;
+    --primary: 239 100% 88%; /* #c0c1ff */
+    --primary-foreground: 246 100% 33%; /* #1000a9 */
 
-    --secondary: 240 4% 16%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 226 36% 81%; /* #bec6e0 */
+    --secondary-foreground: 222 41% 13%; /* #131b2e */
 
-    --muted: 240 4% 16%;
-    --muted-foreground: 240 5% 65%;
+    --muted: 0 1% 21%; /* #353434 */
+    --muted-foreground: 250 15% 81%; /* #c7c4d7 */
 
-    --accent: 190 100% 50%; /* Cyan #00D4FF */
-    --accent-foreground: 0 0% 98%;
+    --accent: 239 100% 88%; /* #c0c1ff */
+    --accent-foreground: 246 100% 33%; /* #1000a9 */
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 6 100% 83%; /* #ffb4ab */
+    --destructive-foreground: 357 100% 21%; /* #690005 */
 
-    --border: 240 5% 15%;
-    --input: 240 5% 15%;
-    --ring: 234 89% 67%;
+    --border: 244 10% 30%; /* #464554 */
+    --input: 0 0% 16%; /* #2a2a2a */
+    --ring: 239 100% 88%; /* #c0c1ff */
 
-    --radius: 1rem; /* 2xl-like rounded corners requested */
+    --radius: 0.5rem;
   }
 
   .dark {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 98%;
-    /* Keep identical to root to force dark mode everywhere */
-    --card: 0 0% 6%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 6%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 234 89% 67%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 240 4% 16%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 4% 16%;
-    --muted-foreground: 240 5% 65%;
-    --accent: 190 100% 50%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 240 5% 15%;
-    --input: 240 5% 15%;
-    --ring: 234 89% 67%;
+    --background: 0 3% 8%;
+    --foreground: 20 7% 89%;
+    --card: 0 3% 8%;
+    --card-foreground: 20 7% 89%;
+    --popover: 0 0% 12%;
+    --popover-foreground: 20 7% 89%;
+    --primary: 239 100% 88%;
+    --primary-foreground: 246 100% 33%;
+    --secondary: 226 36% 81%;
+    --secondary-foreground: 222 41% 13%;
+    --muted: 0 1% 21%;
+    --muted-foreground: 250 15% 81%;
+    --accent: 239 100% 88%;
+    --accent-foreground: 246 100% 33%;
+    --destructive: 6 100% 83%;
+    --destructive-foreground: 357 100% 21%;
+    --border: 244 10% 30%;
+    --input: 0 0% 16%;
+    --ring: 239 100% 88%;
   }
 }
 
@@ -64,7 +63,8 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    background-color: #030303; 
+    color: #e5e2e1;
   }
 }
 
@@ -75,10 +75,83 @@
   .glow-accent {
     box-shadow: 0 0 50px -15px hsl(var(--accent));
   }
-  .glass-panel {
-    background: rgba(255, 255, 255, 0.02);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+  
+  /* Glassmorphism updates v2 */
+  .glass-panel { 
+      background: rgba(20, 19, 19, 0.4); 
+      backdrop-filter: blur(24px); 
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.2); 
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
   }
+  
+  .glass-nav {
+      background: rgba(28, 27, 27, 0.3);
+      backdrop-filter: blur(30px);
+      -webkit-backdrop-filter: blur(30px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  
+  .glass-sidebar {
+      background: rgba(14, 14, 14, 0.4);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-right: 1px solid rgba(255, 255, 255, 0.15);
+  }
+
+  .inner-glow { box-shadow: inset 0 0 10px rgba(192, 193, 255, 0.1); }
+  
+  /* Holographic elements */
+  .scanlines {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(192,193,255,0.05) 50%, rgba(192,193,255,0.05));
+      background-size: 100% 4px;
+      pointer-events: none;
+      z-index: 50;
+      opacity: 0.3;
+  }
+
+  .hud-telemetry {
+      position: absolute;
+      color: rgba(192, 193, 255, 0.6);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      pointer-events: none;
+      z-index: 10;
+  }
+  
+  /* Animations */
+  .pulse-dot { animation: pulse 2s infinite; }
+  @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(192, 193, 255, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(192, 193, 255, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(192, 193, 255, 0); }
+  }
+
+  .float-anim { animation: float 6s ease-in-out infinite; }
+  @keyframes float {
+      0% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+      100% { transform: translateY(0px); }
+  }
+
+  .streaming-text-cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1.2em;
+      background-color: #c0c1ff;
+      animation: blink 1s step-end infinite;
+      vertical-align: middle;
+      margin-left: 4px;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(192, 193, 255, 0.2); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(192, 193, 255, 0.4); }
 }

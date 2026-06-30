@@ -54,8 +54,33 @@ export class JobQueue {
     }
   }
 
+  async schedule(name: string, payload: any, executeFn: () => Promise<any>, delayMs: number): Promise<string> {
+    const id = randomUUID();
+    
+    this.jobs.set(id, {
+      id,
+      name,
+      payload,
+      status: 'PENDING'
+    });
+
+    Logger.info(`Job ${id} scheduled: ${name} in ${delayMs}ms`);
+
+    setTimeout(() => {
+      this.processJob(id, executeFn).catch(e => {
+          Logger.error(`Job processor failed for ${id}`, e);
+      });
+    }, delayMs);
+
+    return id;
+  }
+
   getJobStatus(id: string): Job | undefined {
     return this.jobs.get(id);
+  }
+
+  getAllJobs(): Job[] {
+    return Array.from(this.jobs.values());
   }
 }
 
