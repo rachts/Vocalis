@@ -5,19 +5,28 @@ interface MemorySearchProps {
   setSearchQuery: (val: string) => void;
   activeFilter: string;
   setActiveFilter: (val: string) => void;
+  minImportance: number;
+  setMinImportance: (val: number) => void;
+  sortBy: string;
+  setSortBy: (val: string) => void;
 }
 
-const filters = ["All Memories", "Knowledge", "Code", "People", "Files"];
+const filters = ["All Memories", "Knowledge", "Code", "People", "Files", "Task", "Conversation", "Project", "System"];
+const sortOptions = ["Newest", "Oldest", "Most Important", "Recently Accessed"];
 
 export function MemorySearch({
   searchQuery,
   setSearchQuery,
   activeFilter,
-  setActiveFilter
+  setActiveFilter,
+  minImportance,
+  setMinImportance,
+  sortBy,
+  setSortBy
 }: MemorySearchProps) {
   return (
     <header className="p-4 md:p-margin-desktop shrink-0 z-20">
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-3xl mx-auto space-y-4">
         <div className="relative group">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
             <span className="material-symbols-outlined text-primary/70 group-focus-within:text-primary transition-colors">search</span>
@@ -34,21 +43,48 @@ export function MemorySearch({
             <kbd className="font-mono-label text-mono-label bg-white/5 px-2 py-1 rounded text-on-surface-variant">K</kbd>
           </div>
         </div>
-        {/* Filters */}
-        <div className="flex gap-2 mt-4 overflow-x-auto pb-2 scrollbar-hide">
-          {filters.map(filter => (
-            <button 
-              key={filter}
-              onClick={() => setActiveFilter(filter)}
-              className={`px-4 py-1.5 rounded-full font-body-sm text-body-sm whitespace-nowrap transition-colors ${
-                activeFilter === filter 
-                  ? "bg-primary/20 text-primary border border-primary/30" 
-                  : "bg-white/5 text-on-surface-variant hover:bg-white/10 hover:text-on-surface border border-white/5"
-              }`}
+        
+        {/* Filters and Controls */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide flex-1">
+            {filters.map(filter => (
+              <button 
+                key={filter}
+                onClick={() => setActiveFilter(filter)}
+                className={`px-4 py-1.5 rounded-full font-body-sm text-body-sm whitespace-nowrap transition-colors ${
+                  activeFilter === filter 
+                    ? "bg-primary/20 text-primary border border-primary/30" 
+                    : "bg-white/5 text-on-surface-variant hover:bg-white/10 hover:text-on-surface border border-white/5"
+                }`}
+              >
+                {filter}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-4 shrink-0">
+            <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
+              <span className="text-on-surface-variant text-xs font-mono-label uppercase tracking-widest">Min Impact:</span>
+              <input 
+                type="range" 
+                min="0" max="100" 
+                value={minImportance}
+                onChange={(e) => setMinImportance(parseInt(e.target.value))}
+                className="w-20 accent-primary"
+              />
+              <span className="text-on-surface text-xs font-mono-data w-6">{minImportance}</span>
+            </div>
+
+            <select 
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="bg-white/5 text-on-surface text-sm px-3 py-1.5 rounded-lg border border-white/5 outline-none focus:border-primary/50 transition-colors cursor-pointer"
             >
-              {filter}
-            </button>
-          ))}
+              {sortOptions.map(opt => (
+                <option key={opt} value={opt} className="bg-surface-container-high text-on-surface">{opt}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
     </header>

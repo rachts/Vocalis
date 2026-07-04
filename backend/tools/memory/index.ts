@@ -16,12 +16,25 @@ export const memoryStoreTool: ITool = {
         type: SchemaType.STRING,
         description: "The information to remember",
       },
+      category: {
+        type: SchemaType.STRING,
+        description: "The memory type category (e.g., KNOWLEDGE, CODE, PEOPLE, FILE, PROJECT, CONVERSATION, PREFERENCE)",
+      },
+      importanceScore: {
+        type: SchemaType.NUMBER,
+        description: "An importance score from 0 to 100 for how critical this memory is.",
+      }
     },
     required: ["key", "value"],
   },
   requiresPermission: false,
-  execute: async (args: { key: string, value: string }) => {
-    await memoryStore.store(args.key, args.value);
+  execute: async (args: { key: string, value: string, category?: string, importanceScore?: number }) => {
+    await memoryStore.store({
+      id: args.key,
+      content: args.value,
+      category: args.category || 'KNOWLEDGE',
+      importanceScore: args.importanceScore ?? 50
+    });
     return `Successfully remembered: ${args.key} = ${args.value}`;
   }
 };
