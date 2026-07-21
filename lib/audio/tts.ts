@@ -1,92 +1,125 @@
 export class TTSClient {
   private audio: HTMLAudioElement | null = null;
   private isPlaying = false;
-  private queue: string[] = [];
-  private isProcessingQueue = false;
+  private mediaSource: MediaSource | null = null;
+  private sourceBuffer: SourceBuffer | null = null;
+  private chunkQueue: Uint8Array[] = [];
+  private isAppending = false;
   private onEndGlobal?: () => void;
 
-  async speak(text: string, onEnd?: () => void, onError?: (err: any) => void) {
-    if (!text) return;
-    
-    if (onEnd) this.onEndGlobal = onEnd; // Keep track of the final onEnd callback
-    
-    this.queue.push(text);
-    if (!this.isProcessingQueue) {
-      this.processQueue(onError);
+  constructor() {
+    if (typeof window !== "undefined") {
+      this.audio = new Audio();
     }
   }
 
-  private async processQueue(onError?: (err: any) => void) {
-    this.isProcessingQueue = true;
-    
-    while (this.queue.length > 0) {
-      const text = this.queue.shift()!;
-      try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-        const response = await fetch(`${apiUrl}/api/tts`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ text }),
-        });
+  startStream(onEnd?: () => void, onError?: (err: any) => void) {
+    if (this.isPlaying) this.stop();
+    this.onEndGlobal = onEnd;
+    this.chunkQueue = [];
+    this.isAppending = false;
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch TTS audio");
+    if (!this.audio) this.audio = new Audio();
+
+    this.mediaSource = new MediaSource();
+    this.audio.src = URL.createObjectURL(this.mediaSource);
+    
+    this.mediaSource.addEventListener('sourceopen', () => {
+      try {
+        if (MediaSource.isTypeSupported('audio/mpeg')) {
+          this.sourceBuffer = this.mediaSource!.addSourceBuffer('audio/mpeg');
+        } else {
+          // Fallback, might not work on Safari but we try
+          this.sourceBuffer = this.mediaSource!.addSourceBuffer('audio/mpeg');
         }
 
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        
-        this.audio = new Audio(url);
-        
-        await new Promise<void>((resolve, reject) => {
-          if (!this.audio) return resolve(); // In case it was stopped synchronously
-          
-          this.audio.onended = () => {
-            URL.revokeObjectURL(url);
-            resolve();
-          };
-          
-          this.audio.onerror = (e) => {
-            console.error("Audio playback error", e);
-            URL.revokeObjectURL(url);
-            reject(e);
-          };
-
-          this.isPlaying = true;
-          this.audio.play().catch(reject);
+        this.sourceBuffer.addEventListener('updateend', () => {
+          this.isAppending = false;
+          this.processChunkQueue();
         });
-        
-        this.isPlaying = false;
-        
-      } catch (error) {
-        console.error("TTS Client error:", error);
-        if (onError) onError(error);
+      } catch (err) {
+        console.error("Failed to create SourceBuffer", err);
+        if (onError) onError(err);
+      }
+    });
+
+    this.audio.onended = () => {
+      if (this.onEndGlobal) {
+        this.onEndGlobal();
+        this.onEndGlobal = undefined;
+      }
+      this.isPlaying = false;
+    };
+    
+    this.audio.onerror = (e) => {
+       console.error("Audio playback error", e);
+       if (onError) onError(e);
+       this.isPlaying = false;
+    };
+
+    this.isPlaying = true;
+    this.audio.play().catch(err => {
+       console.error("Failed to play audio", err);
+       if (onError) onError(err);
+    });
+  }
+
+  handleChunk(chunk: ArrayBuffer) {
+    this.chunkQueue.push(new Uint8Array(chunk));
+    this.processChunkQueue();
+  }
+
+  private processChunkQueue() {
+    if (this.isAppending || !this.sourceBuffer || this.chunkQueue.length === 0) return;
+    
+    if (this.mediaSource?.readyState === 'open') {
+      this.isAppending = true;
+      const data = this.chunkQueue.shift()!;
+      try {
+        this.sourceBuffer.appendBuffer(data as BufferSource);
+      } catch (err) {
+        console.error("Error appending buffer:", err);
+        this.isAppending = false;
       }
     }
-    
-    this.isProcessingQueue = false;
-    
-    // Only call onEnd when the entire queue is drained
-    if (this.queue.length === 0 && this.onEndGlobal) {
-      this.onEndGlobal();
-      this.onEndGlobal = undefined;
-    }
+  }
+
+  endStream() {
+    const checkEnd = setInterval(() => {
+      if (this.chunkQueue.length === 0 && !this.isAppending) {
+        if (this.mediaSource?.readyState === 'open') {
+          this.mediaSource.endOfStream();
+        }
+        clearInterval(checkEnd);
+      }
+    }, 100);
+  }
+
+  // Keep the old signature for compatibility, but just error or handle differently
+  speak(text: string, onEnd?: () => void, onError?: (err: any) => void) {
+    console.warn("TTSClient.speak is deprecated. Use Socket streaming instead.");
+    // Fallback if still called directly
+    if (onEnd) onEnd();
   }
 
   stop() {
-    this.queue = [];
-    if (this.audio && this.isPlaying) {
+    if (this.audio) {
       this.audio.pause();
-      this.audio.currentTime = 0;
-      this.isPlaying = false;
+      this.audio.removeAttribute('src');
+      this.audio.load();
     }
-    this.isProcessingQueue = false;
+    this.isPlaying = false;
+    this.chunkQueue = [];
+    this.isAppending = false;
+    if (this.mediaSource?.readyState === 'open') {
+      try {
+        this.mediaSource.endOfStream();
+      } catch (e) {}
+    }
     this.onEndGlobal = undefined;
   }
 
   isActive() {
-    return this.isPlaying || this.queue.length > 0;
+    return this.isPlaying;
   }
 }

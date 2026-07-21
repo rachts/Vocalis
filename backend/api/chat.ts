@@ -5,6 +5,8 @@ import { getOrCreateSession } from '../core/conversation';
 import { IntentRouter, IntentCategory } from '../core/intentRouter';
 import { toolRouter } from '../core/toolRouter';
 import { Logger } from '../utils/logger';
+import { ttsService } from '../services/tts.service';
+import { eventBus, SystemEvents } from '../events/bus';
 import { createAssistantContext } from '../engine/context';
 import { Task } from '../engine/task';
 import { Planner } from '../engine/planner';
@@ -43,6 +45,27 @@ chatRouter.post('/chat', async (req, res) => {
       emitStreamEvent('tool_end', { toolName: intentResult.directTool, result });
       emitStreamEvent('text_stream', { text: result });
       session.addMessage('model', result);
+      
+      try {
+        Logger.info(`Calling TTS (Fast Path) for response: "${result.substring(0, 30)}..."`);
+        const audioStream = await ttsService.generateSpeech(result);
+        audioStream.on('data', (chunk) => {
+          Logger.info('Sending audio chunk (Fast Path)');
+          eventBus.emit(SystemEvents.TTSAudioChunk, chunk);
+        });
+        audioStream.on('end', () => {
+          Logger.info('TTS audio stream ended (Fast Path)');
+          eventBus.emit(SystemEvents.TTSAudioEnd);
+        });
+        audioStream.on('error', (err) => {
+           Logger.error('TTS Fast Path error stream level', err);
+           eventBus.emit(SystemEvents.TTSAudioEnd);
+        });
+      } catch (e) {
+        Logger.error('TTS Fast Path error catching generateSpeech', e);
+        eventBus.emit(SystemEvents.TTSAudioEnd);
+      }
+
       res.write('data: [DONE]\n\n');
       res.end();
       return;
@@ -86,6 +109,26 @@ chatRouter.post('/chat', async (req, res) => {
         }
       }
       session.addMessage('model', fullResponse);
+      
+      try {
+        Logger.info(`Calling TTS (Legacy Path) for response: "${fullResponse.substring(0, 30)}..."`);
+        const audioStream = await ttsService.generateSpeech(fullResponse);
+        audioStream.on('data', (chunk) => {
+          Logger.info('Sending audio chunk (Legacy Path)');
+          eventBus.emit(SystemEvents.TTSAudioChunk, chunk);
+        });
+        audioStream.on('end', () => {
+          Logger.info('TTS audio stream ended (Legacy Path)');
+          eventBus.emit(SystemEvents.TTSAudioEnd);
+        });
+        audioStream.on('error', (err) => {
+           Logger.error('TTS Legacy Path error stream level', err);
+           eventBus.emit(SystemEvents.TTSAudioEnd);
+        });
+      } catch (e) {
+        Logger.error('TTS Legacy Path error catching generateSpeech', e);
+        eventBus.emit(SystemEvents.TTSAudioEnd);
+      }
     } else {
       const text = '\nTask completed successfully.';
       emitStreamEvent('text_stream', { text });

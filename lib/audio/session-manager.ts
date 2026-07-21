@@ -76,11 +76,24 @@ class AudioSessionManager {
       onError(new Error("TTS not initialized"));
       return;
     }
-    
     this.tts.speak(text, onEnd, onError);
   }
 
+  startTTSStream(onEnd: () => void, onError: (err: any) => void) {
+    if (!this.tts) return;
+    this.tts.startStream(onEnd, onError);
+  }
+
+  handleTTSChunk(chunk: ArrayBuffer) {
+    if (this.tts) this.tts.handleChunk(chunk);
+  }
+
+  endTTSStream() {
+    if (this.tts) this.tts.endStream();
+  }
+
   stopSpeaking() {
+
     if (this.tts) this.tts.stop();
   }
 

@@ -3,21 +3,47 @@
 import { Icon } from "@/components/ui/icon"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
+import { useRef } from "react"
+import gsap from "gsap"
+import { useGSAP } from "@gsap/react"
 
 export function SideNavBar() {
   const pathname = usePathname()
+  const container = useRef<HTMLDivElement>(null)
+
+  useGSAP(() => {
+    // Staggered list reveal
+    gsap.from(".nav-item", {
+      x: -30,
+      opacity: 0,
+      stagger: 0.1,
+      duration: 0.8,
+      ease: "power3.out",
+      delay: 0.3
+    })
+    
+    // Logo reveal
+    gsap.from(".logo-anim", {
+      opacity: 0,
+      scale: 0.8,
+      duration: 1,
+      ease: "back.out(1.5)",
+      delay: 0.1
+    })
+  }, { scope: container })
 
   const getLinkClass = (path: string) => {
     const isActive = pathname === path || (path === "/" && pathname === "")
+    let base = "nav-item flex items-center gap-md p-sm transition-all rounded"
     if (isActive) {
-      return "text-primary font-bold bg-white/10 rounded border border-white/10 flex items-center gap-md p-sm"
+      return `${base} text-primary font-bold bg-white/10 border border-white/10`
     }
-    return "text-on-surface-variant flex items-center gap-md p-sm hover:bg-white/10 hover:border hover:border-white/10 transition-all rounded"
+    return `${base} text-on-surface-variant hover:bg-white/10 hover:border hover:border-white/10`
   }
 
   return (
-    <aside className="hidden md:flex flex-col p-md space-y-lg fixed left-0 h-screen w-64 glass-sidebar text-primary font-mono text-body-sm hover:translate-x-1 duration-300 z-30 pt-[80px]">
-      <div className="flex items-center gap-sm mb-xl">
+    <aside ref={container} className="hidden md:flex flex-col p-md space-y-lg fixed left-0 h-screen w-64 glass-sidebar text-primary font-mono text-body-sm z-30 pt-[80px]">
+      <div className="flex items-center gap-sm mb-xl logo-anim">
         <div className="w-10 h-10 rounded border border-white/20 overflow-hidden relative">
           <div className="absolute inset-0 bg-primary/10 animate-pulse"></div>
           <img 
@@ -52,7 +78,7 @@ export function SideNavBar() {
       </nav>
       
       <div className="mt-auto">
-        <a className="text-on-surface-variant flex items-center gap-md p-sm hover:bg-white/10 hover:border hover:border-white/10 transition-all rounded" href="#">
+        <a className="nav-item text-on-surface-variant flex items-center gap-md p-sm hover:bg-white/10 hover:border hover:border-white/10 transition-all rounded" href="#">
           <Icon name="analytics" size={14} />
           System Status
         </a>

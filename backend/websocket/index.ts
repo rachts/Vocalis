@@ -23,6 +23,8 @@ export function registerSocket(io: Server) {
   eventBridge(SystemEvents.AgentCancelled);
   eventBridge(SystemEvents.TaskDelegated);
   eventBridge(SystemEvents.WorkflowRecovered);
+  eventBridge(SystemEvents.TTSAudioChunk);
+  eventBridge(SystemEvents.TTSAudioEnd);
 
   io.on('connection', (socket) => {
     console.log(`Client connected: ${socket.id}`);

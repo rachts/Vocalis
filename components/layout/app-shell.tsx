@@ -1,7 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { AnimatePresence, motion } from "framer-motion"
+import gsap from "gsap"
+import { useGSAP } from "@gsap/react"
 import { useVoiceAssistant } from "@/contexts/voice-assistant-context"
 import { TopNavBar } from "./top-nav"
 import { SideNavBar } from "./side-nav"
@@ -11,6 +13,7 @@ import { TerminalLogs } from "@/components/terminal-logs"
 import { DeveloperDiagnostics } from "@/components/developer-diagnostics"
 import { VoiceStressTester } from "@/components/voice-stress-tester"
 import { AgentDashboard } from "@/components/agent-dashboard"
+import { SmoothScrollProvider } from "@/components/smooth-scroll"
 
 export interface AppShellProps {
   children: React.ReactNode
@@ -40,8 +43,21 @@ export function AppShell({
     isOnline
   } = useVoiceAssistant()
 
+  const container = useRef<HTMLDivElement>(null)
+
+  useGSAP(() => {
+    // Premium staggered entrance for main UI elements
+    gsap.from(".main-content-anim", {
+      opacity: 0,
+      y: 30,
+      duration: 1,
+      ease: "power3.out",
+      delay: 0.4
+    })
+  }, { scope: container })
+
   return (
-    <div className="fixed inset-0 bg-surface-dim text-on-surface overflow-hidden selection:bg-primary/30 flex flex-col font-body-md text-body-md">
+    <div ref={container} className="fixed inset-0 bg-surface-dim text-on-surface overflow-hidden selection:bg-primary/30 flex flex-col font-body-md text-body-md">
        <TopNavBar 
           isTextMode={isTextMode}
           setIsTextMode={setIsTextMode}
@@ -53,10 +69,10 @@ export function AppShell({
        />
        <SideNavBar />
 
-       <main className="flex-1 flex flex-col md:flex-row h-full w-full pt-[72px] md:pl-64 z-10 relative bg-surface-dim">
-          <div className={`flex-1 flex flex-col items-center justify-start overflow-y-auto relative ${hideRightPanel ? '' : 'p-margin-mobile md:p-margin-desktop'}`}>
+       <main className="main-content-anim flex-1 flex flex-col md:flex-row h-full w-full pt-[72px] md:pl-64 z-10 relative bg-surface-dim">
+          <SmoothScrollProvider className={`flex-1 flex flex-col items-center justify-start overflow-y-auto relative ${hideRightPanel ? '' : 'p-margin-mobile md:p-margin-desktop'}`}>
              {children}
-          </div>
+          </SmoothScrollProvider>
           {!hideRightPanel && <RightContextPanel toolExecutions={toolExecutions} />}
        </main>
 

@@ -13,5 +13,10 @@ export const config = {
   },
   settings: {
     elevenLabsVoiceId: process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM', // Rachel default
+    elevenLabsModelId: process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2',
+    elevenLabsStability: Number(process.env.ELEVENLABS_STABILITY) || 0.5,
+    elevenLabsSimilarityBoost: Number(process.env.ELEVENLABS_SIMILARITY_BOOST) || 0.5,
+    elevenLabsStyle: Number(process.env.ELEVENLABS_STYLE) || 0,
+    elevenLabsSpeakerBoost: process.env.ELEVENLABS_SPEAKER_BOOST === 'true' || true,
   },
 };

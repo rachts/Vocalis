@@ -128,8 +128,7 @@ export async function handleCommand(
                     const sentence = sentenceMatch[1]
                     const remainder = sentenceMatch[2] || ""
                     
-                    // Yield sentence immediately to the TTS queue
-                    ctx.speak(sentence.trim())
+                    // ctx.speak(sentence.trim())
                     
                     sentenceBuffer = remainder.trimStart()
                   }
@@ -145,8 +144,7 @@ export async function handleCommand(
                   const sentence = sentenceMatch[1]
                   const remainder = sentenceMatch[2] || ""
                   
-                  // Yield sentence immediately to the TTS queue
-                  ctx.speak(sentence.trim())
+                  // ctx.speak(sentence.trim())
                   
                   sentenceBuffer = remainder.trimStart()
                 }
@@ -159,9 +157,9 @@ export async function handleCommand(
       }
       
       // Flush remaining buffer
-      if (sentenceBuffer.trim()) {
-        ctx.speak(sentenceBuffer.trim())
-      }
+      // if (sentenceBuffer.trim()) {
+      //   ctx.speak(sentenceBuffer.trim())
+      // }
       
       return {
         success: true,

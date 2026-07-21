@@ -2,11 +2,25 @@
 
 import { motion } from "framer-motion"
 import { useEffect, useRef } from "react"
+import gsap from "gsap"
+import { useGSAP } from "@gsap/react"
 
 export type OrbState = "idle" | "wake_listening" | "wake_detected" | "recording" | "transcribing" | "planning" | "executing" | "generating_response" | "speaking" | "recovering" | "error" | string
 
 export function AIOrb({ state }: { state: OrbState }) {
+  const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useGSAP(() => {
+    // Premium Orb Entrance Animation
+    gsap.from(containerRef.current, {
+      scale: 0,
+      opacity: 0,
+      duration: 1.8,
+      ease: "elastic.out(1, 0.4)",
+      delay: 0.2
+    })
+  }, { scope: containerRef })
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -238,7 +252,7 @@ void main() {
   } as Record<string, any>
 
   return (
-    <div className="relative flex items-center justify-center w-64 h-64 md:w-96 md:h-96">
+    <div ref={containerRef} className="relative flex items-center justify-center w-64 h-64 md:w-96 md:h-96">
       {/* Background ripple for listening */}
       {state === "listening" && (
         <motion.div

@@ -249,12 +249,13 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
         transition("error")
       }
       
-      if (!result.handledSpeech && result.response) {
-         speak(result.response)
-      } else {
+      // Speech is now handled via Socket.IO stream directly from the backend.
+      // We only transition to idle if there was no response generated (e.g. silent tool execution).
+      if (!result.response) {
          transition("idle")
          audioSessionManager.startWakeWord(false);
       }
+
     } catch (err: any) {
       addLog(`Internal execution error: ${err.message}`, "error")
       transition("error")
@@ -367,6 +368,28 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
 
     systemSocketRef.current.on('BackgroundJobCompleted', (payload: any) => {
        addLog(`[Job] Background Job ${payload.id} completed.`, 'system');
+    });
+
+    systemSocketRef.current.on('tts_audio_chunk', (chunk: ArrayBuffer) => {
+      if (!audioSessionManager.tts?.isActive()) {
+        transition("speaking");
+        audioSessionManager.startWakeWord(true); // barge-in mode
+        audioSessionManager.startTTSStream(
+          () => {
+            transition("idle");
+            audioSessionManager.startWakeWord(false);
+          },
+          (err) => {
+            transition("error");
+            setError("TTS Error: " + err.message);
+          }
+        );
+      }
+      audioSessionManager.handleTTSChunk(chunk);
+    });
+
+    systemSocketRef.current.on('tts_audio_end', () => {
+      audioSessionManager.endTTSStream();
     });
 
     addLog("Vocalis OS Phase 7 initialized. Productivity tools active.", "system")

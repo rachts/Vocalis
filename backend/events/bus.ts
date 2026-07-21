@@ -31,4 +31,6 @@ export enum SystemEvents {
   AgentCancelled = 'AgentCancelled',
   TaskDelegated = 'TaskDelegated',
   WorkflowRecovered = 'WorkflowRecovered',
+  TTSAudioChunk = 'tts_audio_chunk',
+  TTSAudioEnd = 'tts_audio_end',
 }

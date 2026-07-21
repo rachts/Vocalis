@@ -2,6 +2,7 @@ import { AgentTask, AgentResult } from './types';
 import { SharedAgentContext } from './shared-context';
 import { generateFinalResponse } from '../services/gemini';
 import { Logger } from '../utils/logger';
+import { ttsService } from '../services/tts.service';
 
 /**
  * ConversationAgent — Owns all natural language synthesis and streaming.
@@ -32,6 +33,37 @@ export class ConversationAgent {
       context.session.addMessage('model', fullResponse);
 
       Logger.info(`[ConversationAgent] Response synthesized (${fullResponse.length} chars).`);
+
+      try {
+        Logger.info(`[ConversationAgent] Starting TTS generation...`);
+        const audioStream = await ttsService.generateSpeech(fullResponse);
+        
+        audioStream.on('data', (chunk: Buffer) => {
+          // Broadcast audio chunks
+          import('../events/bus').then(({ eventBus, SystemEvents }) => {
+            eventBus.emit(SystemEvents.TTSAudioChunk, chunk);
+          });
+        });
+        
+        audioStream.on('end', () => {
+          import('../events/bus').then(({ eventBus, SystemEvents }) => {
+            eventBus.emit(SystemEvents.TTSAudioEnd);
+          });
+        });
+
+        audioStream.on('error', (err) => {
+          Logger.error(`[ConversationAgent] TTS Stream Error`, err);
+          import('../events/bus').then(({ eventBus, SystemEvents }) => {
+            eventBus.emit(SystemEvents.TTSAudioEnd);
+          });
+        });
+      } catch (ttsErr: any) {
+        Logger.error(`[ConversationAgent] TTS generation failed`, ttsErr);
+        import('../events/bus').then(({ eventBus, SystemEvents }) => {
+          eventBus.emit(SystemEvents.TTSAudioEnd);
+        });
+      }
+
       return { success: true, data: { response: fullResponse } };
     } catch (err: any) {
       Logger.error(`[ConversationAgent] Failed`, err);

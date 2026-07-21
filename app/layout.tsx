@@ -28,6 +28,7 @@ export default function RootLayout({
       </head>
       <body className="bg-[#030303] text-on-surface antialiased selection:bg-primary/30 h-screen w-full overflow-hidden flex font-body-md text-body-md relative">
         <div className="scanlines"></div>
+        <div className="noise-overlay"></div>
         <VoiceAssistantProvider>
           {children}
         </VoiceAssistantProvider>

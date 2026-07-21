@@ -31,11 +31,11 @@ export class WakeWordDetector {
         const current = event.resultIndex;
         const transcript = event.results[current][0].transcript.toLowerCase();
         
-        let wakeWordRegex = /\b(hey|hi|okay|ok)?\s*(vocalis|jarvis)\b/i;
+        let wakeWordRegex = /\b(hey|hi|okay|ok)?\s*(vocalis|jarvis|vocal is|vocalists|vocalist)\b/i;
         
         if (this.bargeInMode) {
            // When in barge-in mode, listen for "stop" and "cancel" as well
-           wakeWordRegex = /\b(hey|hi|okay|ok)?\s*(vocalis|jarvis|stop|cancel|quiet)\b/i;
+           wakeWordRegex = /\b(hey|hi|okay|ok)?\s*(vocalis|jarvis|vocal is|vocalists|vocalist|stop|cancel|quiet)\b/i;
         }
 
         if (wakeWordRegex.test(transcript)) {
