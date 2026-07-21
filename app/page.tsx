@@ -12,6 +12,9 @@ export default function JarvisInterface() {
   const { 
     fsmState,
     processTextCommand, 
+    startListening,
+    stopListening,
+    isListening
   } = useVoiceAssistant()
   
   const [isTextMode, setIsTextMode] = useState(false)
@@ -42,7 +45,13 @@ export default function JarvisInterface() {
       setShowTerminal={setShowTerminal}
     >
       {/* AI Orb Central Anchor */}
-      <div className="w-64 h-64 md:w-96 md:h-96 relative mt-xl mb-lg flex-shrink-0 float-anim">
+      <div 
+        className={`w-64 h-64 md:w-96 md:h-96 relative mt-xl mb-lg flex-shrink-0 float-anim cursor-pointer transition-transform hover:scale-105 ${isListening ? 'scale-105' : ''}`}
+        onClick={() => {
+           if (fsmState === "idle" || fsmState === "error") startListening();
+           else if (isListening) stopListening();
+        }}
+      >
           <AIOrb state={orbState} />
       </div>
 
