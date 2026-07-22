@@ -16,7 +16,6 @@ export function safeJSONParse<T>(json: string, fallback: T): T {
     return fallback
   }
 }
-
 /**
  * Debounce function for performance optimization
  */
@@ -30,7 +29,6 @@ export function debounce<T extends (...args: any[]) => any>(
     timeout = setTimeout(() => func(...args), wait)
   }
 }
-
 /**
  * Format error messages consistently
  */
