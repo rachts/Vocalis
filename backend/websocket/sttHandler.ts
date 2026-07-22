@@ -61,9 +61,9 @@ export function handleSTTConnection(socket: Socket) {
   });
 
   socket.on('stop-stt', () => {
-    if (deepgramLive) {
-      deepgramLive.close();
-      deepgramLive = null;
+    if (deepgramLive && deepgramLive.readyState === WebSocket.OPEN) {
+      deepgramLive.send(JSON.stringify({ type: 'CloseStream' }));
+      // Deepgram will close the connection automatically after sending the final transcript
     }
   });
 

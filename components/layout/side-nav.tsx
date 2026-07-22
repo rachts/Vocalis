@@ -13,28 +13,36 @@ export function SideNavBar() {
 
   useGSAP(() => {
     // Staggered list reveal
-    gsap.from(".nav-item", {
-      x: -30,
-      opacity: 0,
-      stagger: 0.1,
-      duration: 0.8,
-      ease: "power3.out",
-      delay: 0.3
-    })
+    gsap.fromTo(".nav-item", 
+      { opacity: 0, x: -15 },
+      {
+        opacity: 1,
+        x: 0,
+        stagger: 0.1,
+        duration: 0.8,
+        ease: "power3.out",
+        delay: 0.3,
+        clearProps: "transform"
+      }
+    )
     
     // Logo reveal
-    gsap.from(".logo-anim", {
-      opacity: 0,
-      scale: 0.8,
-      duration: 1,
-      ease: "back.out(1.5)",
-      delay: 0.1
-    })
+    gsap.fromTo(".logo-anim",
+      { opacity: 0, scale: 0.8 },
+      {
+        opacity: 1,
+        scale: 1,
+        duration: 1,
+        ease: "back.out(1.5)",
+        delay: 0.1,
+        clearProps: "transform"
+      }
+    )
   }, { scope: container })
 
   const getLinkClass = (path: string) => {
     const isActive = pathname === path || (path === "/" && pathname === "")
-    let base = "nav-item flex items-center gap-md p-sm transition-all rounded"
+    let base = "nav-item flex items-center gap-md px-md py-sm transition-all rounded"
     if (isActive) {
       return `${base} text-primary font-bold bg-white/10 border border-white/10`
     }

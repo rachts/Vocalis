@@ -46,7 +46,7 @@ const Button = React.forwardRef<
     VariantProps<typeof buttonVariants> & { asChild?: boolean, magnetic?: boolean }
 >(({ className, variant, size, asChild = false, magnetic = true, onClick, ...props }, ref) => {
   const Comp = asChild ? Slot : 'button'
-  const internalRef = React.useRef<HTMLButtonElement>(null)
+  const internalRef = React.useRef<HTMLButtonElement | null>(null)
 
   const setRefs = React.useCallback(
     (node: HTMLButtonElement) => {
@@ -54,7 +54,7 @@ const Button = React.forwardRef<
       if (typeof ref === 'function') {
         ref(node)
       } else if (ref) {
-        (ref as React.MutableRefObject<HTMLButtonElement | null>).current = node
+        (ref as any).current = node
       }
     },
     [ref]

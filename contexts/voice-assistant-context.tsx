@@ -249,9 +249,15 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
         transition("error")
       }
       
-      // Speech is now handled via Socket.IO stream directly from the backend.
-      // We only transition to idle if there was no response generated (e.g. silent tool execution).
-      if (!result.response) {
+      if (result.response) {
+        // Fallback to browser SpeechSynthesis if ElevenLabs stream is unavailable
+        setTimeout(() => {
+          if (fsmRef.current.is("generating_response") || fsmRef.current.is("executing") || fsmRef.current.is("planning")) {
+            addLog("Falling back to browser speech synthesis...", "system");
+            speak(result.response);
+          }
+        }, 1200);
+      } else {
          transition("idle")
          audioSessionManager.startWakeWord(false);
       }
@@ -308,17 +314,24 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
         startListening();
       },
       (text, isFinal, confidence) => {
-        if (isFinal && text.trim()) {
-          audioSessionManager.stopListening();
-          transition("transcribing");
-          
-          if (confidence < 0.65) {
-             addLog(`Low confidence (${Math.round(confidence*100)}%). Asking for clarification.`, "system");
-             speak("I didn't quite catch that. Could you repeat it?");
-             return;
+        if (isFinal) {
+          if (text.trim()) {
+            audioSessionManager.stopListening();
+            transition("transcribing");
+            
+            if (confidence < 0.65) {
+               addLog(`Low confidence (${Math.round(confidence*100)}%). Asking for clarification.`, "system");
+               speak("I didn't quite catch that. Could you repeat it?");
+               return;
+            }
+            
+            processTextCommand(text);
+          } else {
+            // Revert to idle if nothing was heard
+            addLog("No speech recognized.", "system");
+            transition("idle");
+            audioSessionManager.startWakeWord(false);
           }
-          
-          processTextCommand(text);
         }
       },
       (err) => {

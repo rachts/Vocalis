@@ -22,24 +22,36 @@ export class WakeWordDetector {
       this.recognition.interimResults = true;
       this.recognition.lang = 'en-US';
 
-      this.recognition.onresult = (event: any) => {
-        // Prevent instant echoing triggering (debounce)
-        if (Date.now() - this.lastStartTimestamp < 800) {
-           return;
-        }
+      this.recognition.onstart = () => {
+        console.log("[SPEECH RECOGNITION STARTED]");
+      };
 
-        const current = event.resultIndex;
-        const transcript = event.results[current][0].transcript.toLowerCase();
+      this.recognition.onresult = (event: any) => {
+        let fullTranscript = "";
+        let hasFinal = false;
+
+        for (let i = 0; i < event.results.length; i++) {
+          fullTranscript += event.results[i][0].transcript.toLowerCase() + " ";
+          if (event.results[i].isFinal) {
+            hasFinal = true;
+          }
+        }
         
-        let wakeWordRegex = /\b(hey|hi|okay|ok)?\s*(vocalis|jarvis|vocal is|vocalists|vocalist)\b/i;
+        const cleanText = fullTranscript.trim();
+        if (hasFinal) {
+          console.log(`[FINAL RESULT] "${cleanText}"`);
+        } else {
+          console.log(`[INTERIM RESULT] "${cleanText}"`);
+        }
+        
+        let wakeWordRegex = /(vocal|vok|jarvis|focal|localis|vocalis|vocalist|vocals|vocal is)/i;
         
         if (this.bargeInMode) {
-           // When in barge-in mode, listen for "stop" and "cancel" as well
-           wakeWordRegex = /\b(hey|hi|okay|ok)?\s*(vocalis|jarvis|vocal is|vocalists|vocalist|stop|cancel|quiet)\b/i;
+           wakeWordRegex = /(vocal|vok|jarvis|focal|localis|vocalis|vocalist|vocals|vocal is|stop|cancel|quiet)/i;
         }
 
-        if (wakeWordRegex.test(transcript)) {
-          console.log(`Wake word detected: ${transcript}`);
+        if (wakeWordRegex.test(cleanText)) {
+          console.log(`[WAKE WORD DETECTED] Match found in: "${cleanText}"`);
           if (this.onWakeWordDetected) {
             this.onWakeWordDetected();
           }
@@ -48,16 +60,18 @@ export class WakeWordDetector {
 
       this.recognition.onerror = (event: any) => {
         if (event.error !== 'no-speech' && event.error !== 'aborted') {
-          console.warn("WakeWord SpeechRecognition error:", event.error);
-          this.consecutiveFailures++;
+          console.warn("[SPEECH RECOGNITION ERROR]", event.error);
+          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            console.error("Microphone permission denied for SpeechRecognition.");
+          } else {
+            this.consecutiveFailures++;
+          }
         }
       };
 
       this.recognition.onend = () => {
-        // Resilient auto-restart logic
         if (this.isListening) {
-          // Exponential backoff for restarts if we are failing rapidly
-          const backoff = Math.min(1000 * Math.pow(2, this.consecutiveFailures), 30000); // max 30s
+          const backoff = Math.min(500 * Math.pow(2, this.consecutiveFailures), 5000);
           
           if (this.restartTimeout) clearTimeout(this.restartTimeout);
           this.restartTimeout = setTimeout(() => {
@@ -65,16 +79,15 @@ export class WakeWordDetector {
               try {
                 this.recognition.start();
                 this.lastStartTimestamp = Date.now();
-                this.consecutiveFailures = 0; // reset on successful start
               } catch (e) {
                 // Ignore already started errors
               }
             }
-          }, backoff === 1000 && this.consecutiveFailures === 0 ? 100 : backoff); // Fast restart if no failures
+          }, this.consecutiveFailures === 0 ? 50 : backoff);
         }
       };
       
-      console.log("Web Speech Wake word detector initialized");
+      console.log("[VOICE SYSTEM INITIALIZED] Web Speech Wake word detector ready");
     } catch (error) {
       console.error("Failed to initialize wake word detector:", error);
       onError(error as Error);
@@ -88,7 +101,7 @@ export class WakeWordDetector {
       this.consecutiveFailures = 0;
       this.recognition.start();
       this.lastStartTimestamp = Date.now();
-      console.log("Listening for wake word (vocalis)...");
+      console.log("[MICROPHONE READY] Listening for wake word (Vocalis/Jarvis)...");
     } catch (error) {
       console.warn("Speech recognition already started or failed to start.");
     }

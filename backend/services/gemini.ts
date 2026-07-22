@@ -44,7 +44,6 @@ export async function generatePlan(goal: string, history: any[]): Promise<Execut
 
   const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash",
-    tools: toolRouter.getGeminiTools(),
     generationConfig: {
       responseMimeType: "application/json",
       responseSchema: schema,
@@ -54,7 +53,8 @@ export async function generatePlan(goal: string, history: any[]): Promise<Execut
 
   const chat = model.startChat({ history });
   
-  const prompt = `You are a Planner. Given the user's goal, determine the execution plan using the available tools. Goal: ${goal}`;
+  const toolsList = toolRouter.getAllTools().map(t => `- ${t.name}: ${t.description}`).join('\n');
+  const prompt = `You are a Planner. Given the user's goal, determine the execution plan using the available tools.\nAvailable Tools:\n${toolsList}\n\nGoal: ${goal}`;
   const result = await Logger.trackExecutionTime('Gemini_generatePlan', () => chat.sendMessage(prompt));
   
   const text = result.response.text();

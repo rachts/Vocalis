@@ -12,7 +12,7 @@ class TTSService {
     });
   }
 
-  async generateSpeech(text: string): Promise<Readable> {console.log(config.apiKeys.elevenLabs);
+  async generateSpeech(text: string): Promise<Readable> {
     if (!text || text.trim() === "") {
       throw new Error("Text is required for TTS generation.");
     }

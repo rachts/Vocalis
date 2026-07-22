@@ -46,6 +46,7 @@ export class StreamingSTT {
     });
 
     this.socket.on("transcript", (data: { text: string; isFinal: boolean; confidence?: number }) => {
+      console.log(`[TRANSCRIPT RECEIVED] Final: ${data.isFinal} | "${data.text}"`);
       onTranscript(data.text, data.isFinal, data.confidence || 0);
     });
 

@@ -19,7 +19,8 @@ export const chatRouter = Router();
 
 chatRouter.post('/chat', async (req, res) => {
   try {
-    const { prompt, history, imageBase64, sessionId, useAgents } = req.body;
+    const { history, imageBase64, sessionId, useAgents } = req.body;
+    const prompt = req.body.prompt || req.body.command || req.body.text || '';
     
     const session = getOrCreateSession(sessionId || 'default-session');
     const activeHistory = history || session.getGeminiHistory();
