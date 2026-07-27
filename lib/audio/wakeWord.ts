@@ -1,3 +1,62 @@
+function levenshteinDistance(a: string, b: string): number {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const matrix: number[][] = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isFuzzyMatch(transcript: string, targets: string[]): { match: boolean; matchedWord?: string; score?: number } {
+  const normalized = normalizeText(transcript);
+  const words = normalized.split(" ");
+
+  // Direct substring check
+  for (const target of targets) {
+    if (normalized.includes(target)) {
+      return { match: true, matchedWord: target, score: 1.0 };
+    }
+  }
+
+  // Word-by-word fuzzy Levenshtein similarity check
+  for (const word of words) {
+    if (word.length < 3) continue;
+    for (const target of targets) {
+      const dist = levenshteinDistance(word, target);
+      const maxLen = Math.max(word.length, target.length);
+      const similarity = (maxLen - dist) / maxLen;
+      
+      if (dist <= 2 || similarity >= 0.70) {
+        return { match: true, matchedWord: `${word} ~ ${target}`, score: similarity };
+      }
+    }
+  }
+
+  return { match: false };
+}
+
 export class WakeWordDetector {
   private recognition: any = null;
   private isListening = false;
@@ -23,35 +82,41 @@ export class WakeWordDetector {
       this.recognition.lang = 'en-US';
 
       this.recognition.onstart = () => {
-        console.log("[SPEECH RECOGNITION STARTED]");
+        console.log(`[SPEECH RECOGNITION STARTED] Lang: ${this.recognition.lang} | Continuous: ${this.recognition.continuous}`);
       };
 
       this.recognition.onresult = (event: any) => {
         let fullTranscript = "";
         let hasFinal = false;
+        let highestConfidence = 0;
 
         for (let i = 0; i < event.results.length; i++) {
-          fullTranscript += event.results[i][0].transcript.toLowerCase() + " ";
+          fullTranscript += event.results[i][0].transcript + " ";
+          if (event.results[i][0].confidence > highestConfidence) {
+            highestConfidence = event.results[i][0].confidence;
+          }
           if (event.results[i].isFinal) {
             hasFinal = true;
           }
         }
         
-        const cleanText = fullTranscript.trim();
-        if (hasFinal) {
-          console.log(`[FINAL RESULT] "${cleanText}"`);
-        } else {
-          console.log(`[INTERIM RESULT] "${cleanText}"`);
-        }
-        
-        let wakeWordRegex = /(vocal|vok|jarvis|focal|localis|vocalis|vocalist|vocals|vocal is)/i;
-        
-        if (this.bargeInMode) {
-           wakeWordRegex = /(vocal|vok|jarvis|focal|localis|vocalis|vocalist|vocals|vocal is|stop|cancel|quiet)/i;
-        }
+        const cleanText = normalizeText(fullTranscript);
+        const timestamp = new Date().toISOString();
 
-        if (wakeWordRegex.test(cleanText)) {
-          console.log(`[WAKE WORD DETECTED] Match found in: "${cleanText}"`);
+        if (hasFinal) {
+          console.log(`[STT FINAL] Timestamp: ${timestamp} | Confidence: ${highestConfidence.toFixed(2)} | Raw: "${cleanText}"`);
+        } else {
+          console.log(`[STT INTERIM] Timestamp: ${timestamp} | Confidence: ${highestConfidence.toFixed(2)} | Raw: "${cleanText}"`);
+        }
+        
+        const targets = this.bargeInMode 
+          ? ["vocalis", "jarvis", "vocalist", "vocal is", "vocals", "focalis", "localis", "vocal", "vocales", "focus", "stop", "cancel", "quiet"]
+          : ["vocalis", "jarvis", "vocalist", "vocal is", "vocals", "focalis", "localis", "vocal", "vocales", "focus"];
+
+        const result = isFuzzyMatch(cleanText, targets);
+
+        if (result.match) {
+          console.log(`[WAKE WORD DETECTED] Matched: "${result.matchedWord}" (Score: ${result.score?.toFixed(2)}) in transcript: "${cleanText}"`);
           if (this.onWakeWordDetected) {
             this.onWakeWordDetected();
           }

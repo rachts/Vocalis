@@ -304,16 +304,19 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
   }, [addLog, playTone, transition, stopListening])
 
   useEffect(() => {
+    let isMounted = true;
     if (typeof window === "undefined") return
 
     // Initialize Audio Session Manager
     audioSessionManager.initialize(
       () => {
+        if (!isMounted) return;
         transition("wake_detected");
-        addLog("Wake word detected!", "system");
+        addLog("[WAKE WORD DETECTED] Wake word recognized!", "system");
         startListening();
       },
       (text, isFinal, confidence) => {
+        if (!isMounted) return;
         if (isFinal) {
           if (text.trim()) {
             audioSessionManager.stopListening();
@@ -335,21 +338,28 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
         }
       },
       (err) => {
+        if (!isMounted) return;
         setError(err);
         transition("error");
         addLog(`STT Error: ${err}`, "error");
         setTimeout(() => {
-          transition("idle");
-          audioSessionManager.startWakeWord(false);
+          if (isMounted) {
+            transition("idle");
+            audioSessionManager.startWakeWord(false);
+          }
         }, 3000)
       },
       (err) => {
+        if (!isMounted) return;
         console.error(err);
         addLog("Wake word initialization failed.", "error");
       }
     ).then(() => {
-      transition("idle");
-      audioSessionManager.startWakeWord(false);
+      if (isMounted) {
+        transition("idle");
+        console.log("[VOICE CONTEXT INITIALIZED] Starting wake word detector...");
+        audioSessionManager.startWakeWord(false);
+      }
     });
 
     const handleOnline = () => {
@@ -408,6 +418,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
     addLog("Vocalis OS Phase 7 initialized. Productivity tools active.", "system")
 
     return () => {
+      isMounted = false;
       audioSessionManager.releaseAll();
       window.removeEventListener("online", handleOnline)
       window.removeEventListener("offline", handleOffline)
