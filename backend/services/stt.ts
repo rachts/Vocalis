@@ -1,20 +1,16 @@
-import { createClient } from "@deepgram/sdk";
-
 export async function transcribeAudio(audioBuffer: Buffer): Promise<string> {
-  if (!process.env.DEEPGRAM_API_KEY) {
-    throw new Error("DEEPGRAM_API_KEY is not set");
-  }
+  if (!process.env.DEEPGRAM_API_KEY) throw new Error("DEEPGRAM_API_KEY is not set");
   
-  const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
+  const response = await fetch("https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true", {
+    method: "POST",
+    headers: {
+      "Authorization": `Token ${process.env.DEEPGRAM_API_KEY}`,
+      "Content-Type": "audio/webm"
+    },
+    body: audioBuffer as unknown as BodyInit
+  });
   
-  const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
-    audioBuffer,
-    { model: "nova-2", smart_format: true, language: "en" }
-  );
-
-  if (error) {
-    throw error;
-  }
-
-  return result.results.channels[0].alternatives[0].transcript;
+  if (!response.ok) throw new Error(`Deepgram API error: ${response.statusText}`);
+  const data = await response.json();
+  return data.results.channels[0].alternatives[0].transcript;
 }

@@ -1,93 +1,67 @@
-import { micManager } from "./mic-manager";
-
-export class StreamingSTT {
+export class STT {
   private mediaRecorder: MediaRecorder | null = null;
-  private isRecording = false;
   private audioChunks: Blob[] = [];
-  private onTranscriptCallback?: (text: string, isFinal: boolean, confidence: number) => void;
-  private onErrorCallback?: (err: string) => void;
+  private onResult: (text: string) => void;
+  private isBrowserFallback = false;
+  private recognition: any = null;
 
-  initialize(
-    onTranscript: (text: string, isFinal: boolean, confidence: number) => void,
-    onError: (err: string) => void
-  ) {
-    this.onTranscriptCallback = onTranscript;
-    this.onErrorCallback = onError;
-    console.log("REST-based STT initialized");
+  constructor(onResult: (text: string) => void) {
+    this.onResult = onResult;
   }
 
-  async startListening() {
-    this.audioChunks = [];
+  async start() {
     try {
-      const audioStream = await micManager.acquire();
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'}/api/stt-available`);
+      if (!res.ok) throw new Error('Cloud STT unavailable');
       
-      // Safari fallback
-      let mimeType = "audio/webm";
-      if (!MediaRecorder.isTypeSupported("audio/webm") && MediaRecorder.isTypeSupported("audio/mp4")) {
-        mimeType = "audio/mp4";
-      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      this.audioChunks = [];
 
-      this.mediaRecorder = new MediaRecorder(audioStream, {
-        mimeType,
-      });
-
-      this.mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          this.audioChunks.push(event.data);
-        }
+      this.mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) this.audioChunks.push(e.data);
       };
 
       this.mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(this.audioChunks, { type: mimeType });
-        await this.processAudioBlob(audioBlob);
+        const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording.webm');
+        try {
+          const transcribeRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'}/api/transcribe`, {
+            method: 'POST', body: formData
+          });
+          const { text } = await transcribeRes.json();
+          if (text) this.onResult(text);
+        } catch (e) {
+          console.error('STT backend error:', e);
+        }
       };
 
-      this.mediaRecorder.start();
-      this.isRecording = true;
-      console.log("Microphone recording started");
-    } catch (err) {
-      console.error("Microphone access denied or error:", err);
-      if (this.onErrorCallback) this.onErrorCallback("Microphone access denied");
-    }
-  }
-
-  private async processAudioBlob(blob: Blob) {
-    try {
-      const formData = new FormData();
-      formData.append("audio", blob, "recording.webm");
-
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-      const res = await fetch(\`\${apiUrl}/api/transcribe\`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (this.onTranscriptCallback && data.transcript) {
-          this.onTranscriptCallback(data.transcript, true, 1.0);
-        }
-      } else {
-        throw new Error("Transcription failed");
+      this.mediaRecorder.start(250);
+      this.isBrowserFallback = false;
+    } catch (e) {
+      console.log('Falling back to Web Speech API');
+      this.isBrowserFallback = true;
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        this.recognition = new SpeechRecognition();
+        this.recognition.continuous = false;
+        this.recognition.interimResults = false;
+        this.recognition.onresult = (event: any) => {
+          const text = event.results[0][0].transcript;
+          this.onResult(text);
+        };
+        this.recognition.start();
       }
-    } catch (e: any) {
-      console.error("STT process error", e);
-      if (this.onErrorCallback) this.onErrorCallback(e.message);
     }
   }
 
-  stopListening() {
-    if (this.mediaRecorder && this.isRecording) {
-      try {
-        this.mediaRecorder.stop();
-      } catch (e) {}
-      this.isRecording = false;
+  stop() {
+    if (this.isBrowserFallback && this.recognition) {
+      this.recognition.stop();
+    } else if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+      this.mediaRecorder.stop();
+      this.mediaRecorder.stream.getTracks().forEach(t => t.stop());
     }
-    console.log("Stopped listening");
-  }
-
-  disconnect() {
-    this.stopListening();
-    micManager.release();
   }
 }

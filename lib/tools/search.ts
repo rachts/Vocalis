@@ -1,28 +1,14 @@
-import { ToolResult } from "../../types/tools";
-
-export async function searchTool(args: Record<string, unknown>): Promise<ToolResult> {
-  const query = args.query as string;
+import type { ToolResult } from '@/types/tools';
+export async function searchTool(args: { query: string }): Promise<ToolResult> {
   try {
-    const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
-    const res = await fetch(\`\${apiUrl}/api/search\`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return {
-        success: true,
-        data,
-        spokenSummary: data.summary || \`I found some results for \${query}.\`
-      };
-    }
-  } catch (e) {
-    console.error("Search tool error", e);
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    const res = await fetch(`${backendUrl}/api/search?q=${encodeURIComponent(args.query)}`);
+    const data = await res.json();
+    const summary = data.results?.[0]
+      ? `Here's what I found: ${data.results[0].title}. ${data.results[0].snippet}`
+      : `I searched for "${args.query}" but found no results.`;
+    return { success: true, data, spokenSummary: summary };
+  } catch {
+    return { success: false, data: null, spokenSummary: "Search is unavailable right now." };
   }
-  return {
-    success: false,
-    data: null,
-    spokenSummary: \`I encountered an error searching for \${query}.\`
-  };
 }

@@ -3,7 +3,7 @@ import { ToolResult } from "../../types/tools";
 export async function newsTool(): Promise<ToolResult> {
   try {
     const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
-    const res = await fetch(\`\${apiUrl}/api/news\`);
+    const res = await fetch(`${apiUrl}/api/news`);
     if (res.ok) {
       const data = await res.json();
       return {
@@ -18,6 +18,6 @@ export async function newsTool(): Promise<ToolResult> {
   return {
     success: false,
     data: null,
-    spokenSummary: \`I couldn't fetch the news right now.\`
+    spokenSummary: `I couldn't fetch the news right now.`
   };
 }

@@ -1,69 +1,62 @@
-"use client"
+'use client';
+import { useVoiceAssistant } from '@/contexts/voice-assistant-context';
 
-import { useState, useEffect } from "react"
-import { AIOrb } from "@/components/ai-orb"
-import { useVoiceAssistant } from "@/contexts/voice-assistant-context"
-import type { OrbState } from "@/components/ai-orb"
-import { ConversationFeed } from "@/components/conversation/conversation-feed"
-import { DateTime } from "@/components/DateTime"
-import { SearchBar } from "@/components/SearchBar"
-import { DigestCard } from "@/components/DigestCard"
-import { TodoList } from "@/components/TodoList"
-
-export default function JarvisInterface() {
-  const [mounted, setMounted] = useState(false)
-  const { 
-    fsmState,
-    processTextCommand, 
-    startListening,
-    stopListening,
-    isListening
-  } = useVoiceAssistant()
-
-  const orbState: OrbState | string = fsmState;
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted) return null
-
-  const handleSearch = async (query: string) => {
-    await processTextCommand(query)
-  }
+export default function Dashboard() {
+  const { isListening, isSpeaking, history, startListening, stopListening } = useVoiceAssistant();
 
   return (
-    <div className="flex w-full h-full p-8 gap-8 overflow-hidden">
-      {/* Left Sidebar - Utilities */}
-      <div className="flex flex-col w-1/4 min-w-[300px] h-full justify-between pt-8 pb-12 opacity-90">
-        <DateTime />
-        <div className="mt-12">
-          <DigestCard />
+    <div className="flex flex-col md:flex-row h-screen w-full bg-[#FAF8F5] text-[#2D2B27] p-8 gap-8 font-sans">
+      {/* Left Column */}
+      <div className="flex flex-col gap-8 w-full md:w-1/4">
+        <div>
+          <h2 className="text-sm font-bold text-[#8C8579] uppercase tracking-wider mb-2">Time</h2>
+          <p className="text-3xl font-display">
+            {new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+          </p>
+          <p className="text-[#8C8579]">
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </p>
         </div>
-        <div className="mt-auto">
-          <TodoList />
+
+        <div className="bg-[#F3F0EA] p-6 rounded-2xl border border-[#E8E3D9]">
+          <h2 className="text-sm font-bold text-[#8C8579] uppercase tracking-wider mb-4">Daily Digest</h2>
+          <p className="text-sm">Your morning digest will appear here.</p>
         </div>
       </div>
 
-      {/* Main Center - Orb & Search */}
-      <div className="flex flex-col flex-1 items-center justify-center relative">
-        <div 
-          className={\`w-64 h-64 md:w-80 md:h-80 relative mb-12 flex-shrink-0 float-anim cursor-pointer transition-transform hover:scale-105 \${isListening ? 'scale-105' : ''}\`}
-          onClick={() => {
-             if (fsmState === "idle" || fsmState === "error") startListening();
-             else if (isListening) stopListening();
-          }}
-        >
-          <AIOrb state={orbState} />
-        </div>
-
-        <SearchBar onSearch={handleSearch} />
+      {/* Center Column */}
+      <div className="flex flex-col items-center justify-center flex-1 relative">
+        <button
+          onClick={isListening ? stopListening : startListening}
+          className={`w-48 h-48 rounded-full shadow-lg transition-all duration-500 ${
+            isListening ? 'bg-[#E8A44A] shadow-[#F5DDB0] animate-pulse scale-110' :
+            isSpeaking ? 'bg-[#7EB8A4] shadow-[#bce0d3] animate-pulse scale-105' :
+            'bg-[#2D2B27] hover:scale-105 hover:bg-[#1A1917]'
+          }`}
+        />
+        <p className="mt-8 text-[#8C8579] tracking-widest uppercase text-sm">
+          {isListening ? 'Listening...' : isSpeaking ? 'Speaking...' : 'Ready'}
+        </p>
       </div>
 
-      {/* Right Sidebar - Conversation */}
-      <div className="flex flex-col w-1/3 min-w-[350px] h-full bg-[var(--color-paper)]/50 rounded-[32px] overflow-hidden border border-[var(--color-parchment)] shadow-sm">
-        <ConversationFeed />
+      {/* Right Column */}
+      <div className="flex flex-col w-full md:w-1/3 bg-[#F3F0EA] rounded-3xl border border-[#E8E3D9] overflow-hidden">
+        <div className="p-6 border-b border-[#E8E3D9]">
+          <h2 className="text-sm font-bold text-[#8C8579] uppercase tracking-wider">Conversation</h2>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
+          {history.length === 0 && <p className="text-[#8C8579] text-sm text-center">No conversation history yet.</p>}
+          {history.map((msg, idx) => (
+            <div key={idx} className={`p-4 rounded-xl max-w-[85%] ${
+              msg.role === 'user' 
+                ? 'bg-[#E8E3D9] self-end rounded-tr-none' 
+                : 'bg-white shadow-sm self-start rounded-tl-none'
+            }`}>
+              <p className="text-sm">{msg.content}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
-  )
+  );
 }

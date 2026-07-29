@@ -1,12 +1,15 @@
-import { ToolName } from "./tools";
-
-export interface Message {
-  role: "user" | "assistant" | "system";
-  content: string;
-}
+import type { Message } from './tools';
 
 export interface AgentResponse {
   response: string;
-  toolCalls?: { name: ToolName; args: Record<string, unknown> }[];
-  action?: string;
+  action?: {
+    type: 'open_url' | 'play_audio';
+    payload: string;
+  };
+}
+
+export interface AgentContext {
+  transcript: string;
+  history: Message[];
+  sessionId: string;
 }

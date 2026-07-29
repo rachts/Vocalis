@@ -1,45 +1,35 @@
-import { createClient } from "@supabase/supabase-js";
-import { Message } from "../types/agents";
+import type { Message } from '@/types/tools';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+export async function getClient() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return null;
+  const { createClient } = await import('@supabase/supabase-js');
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+}
 
-export const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
-
-export async function getHistory(sessionId: string, limit = 20): Promise<Message[]> {
-  if (!supabase) return [];
+export async function getMemory(sessionId: string): Promise<Message[]> {
+  const supabase = await getClient();
+  if (supabase) {
+    const { data } = await supabase.from('conversations')
+      .select('role, content')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true });
+    return data || [];
+  }
   
-  const { data, error } = await supabase
-    .from("conversations")
-    .select("role, content")
-    .eq("session_id", sessionId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  if (error || !data) {
-    console.error("Failed to get history", error);
-    return [];
+  if (typeof window !== 'undefined') {
+    const local = localStorage.getItem(`vocalis_mem_${sessionId}`);
+    return local ? JSON.parse(local) : [];
   }
-
-  return data.reverse() as Message[];
+  return [];
 }
 
-export async function appendMessage(sessionId: string, message: Message): Promise<void> {
-  if (!supabase) return;
-
-  const { error } = await supabase
-    .from("conversations")
-    .insert({
-      session_id: sessionId,
-      role: message.role,
-      content: message.content,
-    });
-
-  if (error) {
-    console.error("Failed to append message", error);
+export async function saveMemory(sessionId: string, role: 'user' | 'assistant', content: string): Promise<void> {
+  const supabase = await getClient();
+  if (supabase) {
+    await supabase.from('conversations').insert({ session_id: sessionId, role, content });
+  } else if (typeof window !== 'undefined') {
+    const history = await getMemory(sessionId);
+    history.push({ role, content });
+    localStorage.setItem(`vocalis_mem_${sessionId}`, JSON.stringify(history.slice(-20)));
   }
-}
-
-export async function summarizeAndCompress(sessionId: string): Promise<void> {
-  // To be implemented: Fetch older messages, summarize, and compress in DB.
 }

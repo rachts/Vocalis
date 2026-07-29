@@ -19,7 +19,7 @@ import { agentRuntime } from './agents/runtime';
 import { persistence } from './agents/persistence';
 import { transcribeAudio } from './services/stt';
 import { synthesizeSpeech } from './services/tts';
-import { startDigestJob } from './jobs/morningDigest';
+import { startMorningDigestJob } from './jobs/morningDigest';
 
 const app = express();
 const server = http.createServer(app);
@@ -49,33 +49,36 @@ toolRouter.registerTool(NotificationTool);
 registerRoutes(app);
 registerSocket(io);
 
-// STT and TTS Endpoints
+app.get('/api/stt-available', (req, res) => {
+  res.status(process.env.DEEPGRAM_API_KEY ? 200 : 404).json({ available: !!process.env.DEEPGRAM_API_KEY });
+});
+
+app.get('/api/tts-available', (req, res) => {
+  res.status(process.env.ELEVENLABS_API_KEY ? 200 : 404).json({ available: !!process.env.ELEVENLABS_API_KEY });
+});
+
 const upload = multer();
 app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No audio file provided' });
-    }
-    const transcript = await transcribeAudio(req.file.buffer);
-    res.json({ transcript });
+    if (!req.file) return res.status(400).json({ error: 'No audio file' });
+    const text = await transcribeAudio(req.file.buffer);
+    res.json({ text });
   } catch (err: any) {
     console.error('STT Error:', err);
-    res.status(500).json({ error: err.message || 'STT failed' });
+    res.status(500).json({ error: err.message });
   }
 });
 
 app.post('/api/speak', async (req, res) => {
   try {
     const { text, voiceId } = req.body;
-    if (!text) {
-      return res.status(400).json({ error: 'No text provided' });
-    }
+    if (!text) return res.status(400).json({ error: 'No text provided' });
     const audioBuffer = await synthesizeSpeech(text, voiceId);
     res.set('Content-Type', 'audio/mpeg');
     res.send(audioBuffer);
   } catch (err: any) {
     console.error('TTS Error:', err);
-    res.status(500).json({ error: err.message || 'TTS failed' });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -87,7 +90,7 @@ if (restoredAgents.length > 0) {
 }
 
 // Start Scheduled Jobs
-startDigestJob();
+startMorningDigestJob();
 
 // Start Server
 server.listen(config.port, () => {

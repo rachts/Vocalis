@@ -37,7 +37,7 @@ export function TodoList() {
             ) : (
               <Circle size={18} className="text-[var(--color-sand)] group-hover:text-[var(--color-stone)] mr-3 flex-shrink-0 transition-colors" />
             )}
-            <span className={\`text-sm font-body \${todo.completed ? 'text-[var(--color-stone)] line-through' : 'text-[var(--color-ink)]'}\`}>
+            <span className={`text-sm font-body ${todo.completed ? 'text-[var(--color-stone)] line-through' : 'text-[var(--color-ink)]'}`}>
               {todo.text}
             </span>
           </div>

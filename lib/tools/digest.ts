@@ -4,7 +4,7 @@ export async function digestTool(): Promise<ToolResult> {
   try {
     // Could trigger a backend route that compiles the digest, or we can just trigger it directly here
     const apiUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
-    const res = await fetch(\`\${apiUrl}/api/digest\`);
+    const res = await fetch(`${apiUrl}/api/digest`);
     
     if (res.ok) {
       const data = await res.json();
@@ -21,6 +21,6 @@ export async function digestTool(): Promise<ToolResult> {
   return {
     success: false,
     data: null,
-    spokenSummary: \`I couldn't generate the morning digest right now.\`
+    spokenSummary: `I couldn't generate the morning digest right now.`
   };
 }

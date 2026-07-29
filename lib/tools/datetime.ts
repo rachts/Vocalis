@@ -1,14 +1,9 @@
-import { ToolResult } from "../../types/tools";
-import { format } from "date-fns";
-
+import type { ToolResult } from '@/types/tools';
 export async function datetimeTool(): Promise<ToolResult> {
   const now = new Date();
-  const time = format(now, "h:mm a");
-  const date = format(now, "EEEE, MMMM do");
-  
-  return {
-    success: true,
-    data: { time, date },
-    spokenSummary: \`It's currently \${time} on \${date}.\`
-  };
+  const formatted = now.toLocaleString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long',
+    day: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+  return { success: true, data: formatted, spokenSummary: `It's ${formatted}.` };
 }

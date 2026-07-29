@@ -1,15 +1,14 @@
 export type ToolName =
-  | "get_time_date"
-  | "get_weather"
-  | "web_search"
-  | "open_url"
-  | "add_todo"
-  | "list_todos"
-  | "complete_todo"
-  | "get_news"
-  | "set_reminder"
-  | "play_music"
-  | "run_morning_digest";
+  | 'get_datetime'
+  | 'get_weather'
+  | 'web_search'
+  | 'open_url'
+  | 'add_todo'
+  | 'list_todos'
+  | 'complete_todo'
+  | 'clear_todos'
+  | 'set_reminder'
+  | 'run_morning_digest';
 
 export interface ToolCall {
   name: ToolName;
@@ -19,5 +18,10 @@ export interface ToolCall {
 export interface ToolResult {
   success: boolean;
   data: unknown;
-  spokenSummary: string; // what the TTS should say
+  spokenSummary: string;
+}
+
+export interface Message {
+  role: 'user' | 'assistant';
+  content: string;
 }
