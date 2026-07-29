@@ -12,8 +12,8 @@ ENV/
 .venv/
 
 # Environment variables
+.env*.local
 .env
-.env.local
 
 # =========================
 # JavaScript / Node.js
@@ -61,14 +61,10 @@ Thumbs.db
 .cache/
 .tmp/
 
-# =========================
 # Media / Generated assets
-# =========================
 *.mp4
 *.avi
 *.mov
-*.png
-*.jpg
 
 # =========================
 # Jupyter
