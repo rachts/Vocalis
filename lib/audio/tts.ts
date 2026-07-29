@@ -1,125 +1,79 @@
 export class TTSClient {
-  private audio: HTMLAudioElement | null = null;
+  private audioContext: AudioContext | null = null;
+  private source: AudioBufferSourceNode | null = null;
   private isPlaying = false;
-  private mediaSource: MediaSource | null = null;
-  private sourceBuffer: SourceBuffer | null = null;
-  private chunkQueue: Uint8Array[] = [];
-  private isAppending = false;
   private onEndGlobal?: () => void;
 
   constructor() {
     if (typeof window !== "undefined") {
-      this.audio = new Audio();
+      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
   }
 
-  startStream(onEnd?: () => void, onError?: (err: any) => void) {
+  async speak(text: string, onEnd?: () => void, onError?: (err: any) => void) {
     if (this.isPlaying) this.stop();
     this.onEndGlobal = onEnd;
-    this.chunkQueue = [];
-    this.isAppending = false;
 
-    if (!this.audio) this.audio = new Audio();
+    try {
+      if (!this.audioContext) {
+        throw new Error("AudioContext not supported");
+      }
+      
+      if (this.audioContext.state === "suspended") {
+        await this.audioContext.resume();
+      }
 
-    this.mediaSource = new MediaSource();
-    this.audio.src = URL.createObjectURL(this.mediaSource);
-    
-    this.mediaSource.addEventListener('sourceopen', () => {
-      try {
-        if (MediaSource.isTypeSupported('audio/mpeg')) {
-          this.sourceBuffer = this.mediaSource!.addSourceBuffer('audio/mpeg');
-        } else {
-          // Fallback, might not work on Safari but we try
-          this.sourceBuffer = this.mediaSource!.addSourceBuffer('audio/mpeg');
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+      const res = await fetch(\`\${apiUrl}/api/speak\`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to fetch TTS audio");
+      }
+
+      const arrayBuffer = await res.arrayBuffer();
+      const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+
+      this.source = this.audioContext.createBufferSource();
+      this.source.buffer = audioBuffer;
+      this.source.connect(this.audioContext.destination);
+
+      this.source.onended = () => {
+        this.isPlaying = false;
+        if (this.onEndGlobal) {
+          this.onEndGlobal();
+          this.onEndGlobal = undefined;
         }
+      };
 
-        this.sourceBuffer.addEventListener('updateend', () => {
-          this.isAppending = false;
-          this.processChunkQueue();
-        });
-      } catch (err) {
-        console.error("Failed to create SourceBuffer", err);
-        if (onError) onError(err);
-      }
-    });
-
-    this.audio.onended = () => {
-      if (this.onEndGlobal) {
-        this.onEndGlobal();
-        this.onEndGlobal = undefined;
-      }
+      this.isPlaying = true;
+      this.source.start(0);
+    } catch (err) {
+      console.error("TTS play error", err);
       this.isPlaying = false;
-    };
-    
-    this.audio.onerror = (e) => {
-       console.error("Audio playback error", e);
-       if (onError) onError(e);
-       this.isPlaying = false;
-    };
-
-    this.isPlaying = true;
-    this.audio.play().catch(err => {
-       console.error("Failed to play audio", err);
-       if (onError) onError(err);
-    });
-  }
-
-  handleChunk(chunk: ArrayBuffer) {
-    this.chunkQueue.push(new Uint8Array(chunk));
-    this.processChunkQueue();
-  }
-
-  private processChunkQueue() {
-    if (this.isAppending || !this.sourceBuffer || this.chunkQueue.length === 0) return;
-    
-    if (this.mediaSource?.readyState === 'open') {
-      this.isAppending = true;
-      const data = this.chunkQueue.shift()!;
-      try {
-        this.sourceBuffer.appendBuffer(data as BufferSource);
-      } catch (err) {
-        console.error("Error appending buffer:", err);
-        this.isAppending = false;
-      }
+      if (onError) onError(err);
     }
-  }
-
-  endStream() {
-    const checkEnd = setInterval(() => {
-      if (this.chunkQueue.length === 0 && !this.isAppending) {
-        if (this.mediaSource?.readyState === 'open') {
-          this.mediaSource.endOfStream();
-        }
-        clearInterval(checkEnd);
-      }
-    }, 100);
-  }
-
-  // Keep the old signature for compatibility, but just error or handle differently
-  speak(text: string, onEnd?: () => void, onError?: (err: any) => void) {
-    console.warn("TTSClient.speak is deprecated. Use Socket streaming instead.");
-    // Fallback if still called directly
-    if (onEnd) onEnd();
   }
 
   stop() {
-    if (this.audio) {
-      this.audio.pause();
-      this.audio.removeAttribute('src');
-      this.audio.load();
-    }
-    this.isPlaying = false;
-    this.chunkQueue = [];
-    this.isAppending = false;
-    if (this.mediaSource?.readyState === 'open') {
+    if (this.source && this.isPlaying) {
       try {
-        this.mediaSource.endOfStream();
+        this.source.stop();
       } catch (e) {}
     }
+    this.isPlaying = false;
     this.onEndGlobal = undefined;
   }
 
   isActive() {
     return this.isPlaying;
   }
+
+  // Stubs for stream methods if they are still called by context
+  startStream(onEnd?: () => void, onError?: (err: any) => void) {}
+  handleChunk(chunk: ArrayBuffer) {}
+  endStream() {}
 }

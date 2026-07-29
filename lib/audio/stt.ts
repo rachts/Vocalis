@@ -1,70 +1,23 @@
-import { io, Socket } from "socket.io-client";
 import { micManager } from "./mic-manager";
 
 export class StreamingSTT {
-  private socket: Socket | null = null;
   private mediaRecorder: MediaRecorder | null = null;
   private isRecording = false;
-  private reconnectAttempts = 0;
+  private audioChunks: Blob[] = [];
+  private onTranscriptCallback?: (text: string, isFinal: boolean, confidence: number) => void;
+  private onErrorCallback?: (err: string) => void;
 
   initialize(
     onTranscript: (text: string, isFinal: boolean, confidence: number) => void,
     onError: (err: string) => void
   ) {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-    this.socket = io(apiUrl, {
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
-    });
-
-    this.socket.on("connect", () => {
-      console.log("Connected to STT proxy via WebSocket");
-      this.reconnectAttempts = 0;
-    });
-
-    this.socket.on("disconnect", (reason) => {
-      console.warn("STT WebSocket disconnected:", reason);
-      if (reason === "io server disconnect") {
-        this.socket?.connect(); // Reconnect manually if server disconnected
-      }
-    });
-
-    this.socket.on("connect_error", (error) => {
-      this.reconnectAttempts++;
-      console.error("STT WebSocket connection error:", error);
-      if (this.reconnectAttempts > 3) {
-        onError("STT connection failing. Trying to reconnect...");
-      }
-    });
-
-    this.socket.on("stt-ready", () => {
-      console.log("Deepgram STT connection ready");
-      this.startMicrophone();
-    });
-
-    this.socket.on("transcript", (data: { text: string; isFinal: boolean; confidence?: number }) => {
-      console.log(`[TRANSCRIPT RECEIVED] Final: ${data.isFinal} | "${data.text}"`);
-      onTranscript(data.text, data.isFinal, data.confidence || 0);
-    });
-
-    this.socket.on("stt-error", (err: string) => {
-      console.error("STT Error from server:", err);
-      onError(err);
-    });
+    this.onTranscriptCallback = onTranscript;
+    this.onErrorCallback = onError;
+    console.log("REST-based STT initialized");
   }
 
   async startListening() {
-    if (!this.socket) {
-      console.error("STT not initialized");
-      return;
-    }
-    this.socket.emit("start-stt");
-  }
-
-  private async startMicrophone() {
+    this.audioChunks = [];
     try {
       const audioStream = await micManager.acquire();
       
@@ -79,16 +32,47 @@ export class StreamingSTT {
       });
 
       this.mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0 && this.socket && this.socket.connected) {
-          this.socket.emit("audio-data", event.data);
+        if (event.data.size > 0) {
+          this.audioChunks.push(event.data);
         }
       };
 
-      this.mediaRecorder.start(250); // Send audio chunks every 250ms
+      this.mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(this.audioChunks, { type: mimeType });
+        await this.processAudioBlob(audioBlob);
+      };
+
+      this.mediaRecorder.start();
       this.isRecording = true;
       console.log("Microphone recording started");
     } catch (err) {
       console.error("Microphone access denied or error:", err);
+      if (this.onErrorCallback) this.onErrorCallback("Microphone access denied");
+    }
+  }
+
+  private async processAudioBlob(blob: Blob) {
+    try {
+      const formData = new FormData();
+      formData.append("audio", blob, "recording.webm");
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+      const res = await fetch(\`\${apiUrl}/api/transcribe\`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (this.onTranscriptCallback && data.transcript) {
+          this.onTranscriptCallback(data.transcript, true, 1.0);
+        }
+      } else {
+        throw new Error("Transcription failed");
+      }
+    } catch (e: any) {
+      console.error("STT process error", e);
+      if (this.onErrorCallback) this.onErrorCallback(e.message);
     }
   }
 
@@ -99,23 +83,11 @@ export class StreamingSTT {
       } catch (e) {}
       this.isRecording = false;
     }
-
-    if (this.socket && this.socket.connected) {
-      this.socket.emit("stop-stt");
-    }
-    
-    // We do NOT release the micManager here because VAD might still need it 
-    // or it's handled by the context cleanup. 
-    
     console.log("Stopped listening");
   }
 
   disconnect() {
     this.stopListening();
-    micManager.release(); // Fully release mic resources
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
-    }
+    micManager.release();
   }
 }

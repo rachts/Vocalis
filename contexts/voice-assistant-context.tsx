@@ -5,6 +5,7 @@ import { VoiceStateMachine, type VoiceState } from "@/lib/fsm/voice-state-machin
 import { handleCommand, type CommandContext } from "@/lib/commandHandler"
 import type { LogEntry } from "@/components/terminal-logs"
 import { audioSessionManager } from "@/lib/audio/session-manager"
+import { getHistory, appendMessage } from "@/lib/memory"
 import { io, Socket } from "socket.io-client"
 import { PermissionModal } from "@/components/permission-modal"
 
@@ -205,8 +206,11 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
     
     addLog(text, "user")
     
-    const userMessage = { role: "user", parts: [{ text }] };
+    const userMessage = { role: "user" as const, content: text, parts: [{ text }] };
     setChatHistory(prev => [...prev, userMessage]);
+    
+    // Attempt to persist the message
+    appendMessage("default-session", { role: "user", content: text }).catch(e => console.error(e));
 
     const ctx: CommandContext = {
       speak,
@@ -242,8 +246,11 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
       if (result.success && result.response) {
         addLog(result.response, "system")
         playTone("done")
-        const aiMessage = { role: "model", parts: [{ text: result.response }] };
+        const aiMessage = { role: "assistant" as const, content: result.response, parts: [{ text: result.response }] };
         setChatHistory(prev => [...prev, aiMessage]);
+        
+        // Persist AI response
+        appendMessage("default-session", { role: "assistant", content: result.response }).catch(e => console.error(e));
       } else if (!result.success && result.response) {
         addLog(result.response, "error")
         transition("error")
@@ -306,6 +313,13 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true;
     if (typeof window === "undefined") return
+
+    // Load conversation history from Supabase
+    getHistory("default-session").then(history => {
+      if (isMounted && history && history.length > 0) {
+        setChatHistory(history.map(msg => ({ role: msg.role === 'assistant' ? 'model' : msg.role, parts: [{ text: msg.content }] })));
+      }
+    }).catch(e => console.error("Failed to load history", e));
 
     // Initialize Audio Session Manager
     audioSessionManager.initialize(

@@ -152,23 +152,23 @@ void main() {
       if (uMouse) gl!.uniform2f(uMouse, mouse.x, mouse.y)
       
       // Determine colors based on state
-      // Default: Jarvis Cyan/Blue
-      let colorBlue = [0.0, 0.6, 1.0]
-      let colorIndigo = [0.388, 0.4, 0.945]
+      // Default: Jarvis Warm Palette
+      let colorBlue = [0.91, 0.643, 0.29] // var(--color-glow)
+      let colorIndigo = [0.96, 0.866, 0.69] // var(--color-glow-soft)
       
       // Dynamic colors!
       if (state === "executing") {
-        colorBlue = [1.0, 0.6, 0.0] // Amber
-        colorIndigo = [0.945, 0.4, 0.388] // Reddish
+        colorBlue = [0.91, 0.643, 0.29] // glow
+        colorIndigo = [0.96, 0.866, 0.69] 
       } else if (state === "planning") {
-        colorBlue = [0.0, 1.0, 0.6] // Greenish
-        colorIndigo = [0.388, 0.945, 0.4] 
+        colorBlue = [0.55, 0.52, 0.47] // stone
+        colorIndigo = [0.78, 0.76, 0.70] // sand
       } else if (state === "speaking") {
-        colorBlue = [1.0, 0.0, 0.8] // Pink/Magenta
-        colorIndigo = [0.6, 0.0, 1.0] 
+        colorBlue = [0.49, 0.72, 0.64] // speaking
+        colorIndigo = [0.41, 0.61, 0.50] // success
       } else if (state === "error") {
-        colorBlue = [1.0, 0.0, 0.0] // Red
-        colorIndigo = [0.5, 0.0, 0.0] 
+        colorBlue = [0.75, 0.38, 0.29] // error
+        colorIndigo = [0.85, 0.48, 0.39] 
       }
 
       if (uColorBlue) gl!.uniform3f(uColorBlue, colorBlue[0], colorBlue[1], colorBlue[2])
@@ -190,63 +190,63 @@ void main() {
   const variants = {
     idle: {
       scale: 1,
-      boxShadow: "0 0 20px rgba(99, 102, 241, 0.4)",
+      boxShadow: "0 0 20px rgba(232, 164, 74, 0.3)",
       transition: { repeat: Infinity, duration: 4, ease: "easeInOut" }
     },
     wake_listening: {
       scale: 1,
-      boxShadow: "0 0 20px rgba(99, 102, 241, 0.4)",
+      boxShadow: "0 0 20px rgba(232, 164, 74, 0.4)",
       transition: { repeat: Infinity, duration: 4, ease: "easeInOut" }
     },
     recording: {
       scale: 1.15,
-      boxShadow: "0 0 60px rgba(99, 102, 241, 0.8)",
+      boxShadow: "0 0 40px rgba(232, 164, 74, 0.6)",
       transition: { repeat: Infinity, duration: 1.5, ease: "easeInOut", repeatType: "reverse" as const }
     },
     transcribing: {
       scale: [1, 1.05, 1],
       rotate: [0, 180, 360],
-      boxShadow: "0 0 40px rgba(168, 85, 247, 0.6)",
+      boxShadow: "0 0 40px rgba(232, 164, 74, 0.5)",
       transition: { repeat: Infinity, duration: 2, ease: "linear" }
     },
     wake_detected: {
       scale: [1, 1.05, 1],
       rotate: [0, 180, 360],
-      boxShadow: "0 0 40px rgba(168, 85, 247, 0.6)",
+      boxShadow: "0 0 40px rgba(232, 164, 74, 0.5)",
       transition: { repeat: Infinity, duration: 2, ease: "linear" }
     },
     recovering: {
       scale: [1, 1.05, 1],
       rotate: [0, 180, 360],
-      boxShadow: "0 0 40px rgba(168, 85, 247, 0.6)",
+      boxShadow: "0 0 40px rgba(232, 164, 74, 0.5)",
       transition: { repeat: Infinity, duration: 2, ease: "linear" }
     },
     planning: {
       scale: [1, 1.1, 1],
       rotate: [0, 90, 180, 270, 360],
-      boxShadow: "0 0 50px rgba(56, 189, 248, 0.8)", // light blue
+      boxShadow: "0 0 30px rgba(140, 133, 121, 0.5)", // stone
       transition: { repeat: Infinity, duration: 3, ease: "linear" }
     },
     executing: {
       scale: [1, 1.05, 1],
       rotate: [0, -180, -360],
-      boxShadow: "0 0 40px rgba(245, 158, 11, 0.6)", // amber
+      boxShadow: "0 0 40px rgba(232, 164, 74, 0.6)", // glow
       transition: { repeat: Infinity, duration: 1.5, ease: "linear" }
     },
     generating_response: {
       scale: [1, 1.2, 1],
       rotate: [0, 360],
-      boxShadow: "0 0 60px rgba(236, 72, 153, 0.7)", // pink
+      boxShadow: "0 0 40px rgba(126, 184, 164, 0.5)", // speaking
       transition: { repeat: Infinity, duration: 2, ease: "easeInOut" }
     },
     speaking: {
       scale: [1.1, 1.3, 1.15, 1.25, 1.1],
-      boxShadow: "0 0 80px rgba(99, 102, 241, 1)",
+      boxShadow: "0 0 50px rgba(126, 184, 164, 0.8)", // speaking
       transition: { repeat: Infinity, duration: 0.3, ease: "easeInOut" }
     },
     error: {
       scale: 1,
-      boxShadow: "0 0 30px rgba(239, 68, 68, 0.8)", // red
+      boxShadow: "0 0 30px rgba(192, 98, 74, 0.6)", // error
       transition: { repeat: Infinity, duration: 1, ease: "easeInOut", repeatType: "reverse" as const }
     }
   } as Record<string, any>

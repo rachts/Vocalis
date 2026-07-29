@@ -4,6 +4,25 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* Warm neutrals — base palette */
+  --color-cream: #FAF8F5;        /* page background */
+  --color-paper: #F3F0EA;        /* card background */
+  --color-parchment: #E8E3D9;    /* borders, dividers */
+  --color-sand: #C9C2B4;         /* muted text, icons */
+  --color-stone: #8C8579;        /* secondary text */
+  --color-ink: #2D2B27;          /* primary text */
+  --color-charcoal: #1A1917;     /* headings */
+
+  /* Accent — warm amber, used sparingly */
+  --color-glow: #E8A44A;         /* active mic, pulse, CTA */
+  --color-glow-soft: #F5DDB0;    /* glow background tints */
+
+  /* Semantic */
+  --color-listening: #E8A44A;    /* mic active state */
+  --color-speaking: #7EB8A4;     /* TTS playback */
+  --color-error: #C0624A;        /* errors */
+  --color-success: #6A9E82;      /* confirmations */
+
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -75,7 +94,8 @@
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
+  --font-sans: 'DM Sans', sans-serif;
+  --font-display: 'DM Serif Display', serif;
   --font-mono: 'Geist Mono', 'Geist Mono Fallback';
   --color-background: var(--background);
   --color-foreground: var(--foreground);
