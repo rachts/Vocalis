@@ -70,3 +70,47 @@ Thumbs.db
 # Jupyter
 # =========================
 .ipynb_checkpoints/
+# =========================
+# TypeScript Build Cache
+# =========================
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# =========================
+# Lockfile Conflicts
+# =========================
+# Use ONE package manager. If using npm, ignore pnpm/yarn:
+pnpm-lock.yaml
+yarn.lock
+# If using pnpm, ignore npm instead:
+# package-lock.json
+
+# =========================
+# IDE / Cloud IDEs
+# =========================
+.replit
+.codesandbox/
+.gitpod.yml
+
+# =========================
+# Scratch & Prototypes
+# =========================
+scratch/
+stitch_screens/
+
+# =========================
+# Template / Generated Assets
+# =========================
+public/placeholder*
+public/images/dall-*.png
+
+# =========================
+# Python (stray files in TS projects)
+# =========================
+*.py
+__pycache__/
+
+# =========================
+# Misc
+# =========================
+*.local
