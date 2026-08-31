@@ -20,12 +20,12 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=DM+Serif+Display&display=swap" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
       </head>
-      <body className="bg-[var(--color-cream)] text-[var(--color-ink)] font-sans antialiased h-screen w-full overflow-hidden flex relative selection:bg-[var(--color-glow-soft)]">
+      <body suppressHydrationWarning className="bg-[var(--color-cream)] text-[var(--color-ink)] font-sans antialiased h-screen w-full overflow-hidden flex relative selection:bg-[var(--color-glow-soft)]">
         <VoiceAssistantProvider>
           {children}
         </VoiceAssistantProvider>

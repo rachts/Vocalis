@@ -4,6 +4,12 @@ import http from 'http';
 import { Server } from 'socket.io';
 import multer from 'multer';
 import { config } from './config';
+import {
+  isOmniVoiceAvailable,
+  transcribeAudio as omniTranscribeAudio,
+  synthesizeSpeech as omniSynthesizeSpeech,
+  listVoices,
+} from './services/omnivoice';
 import { registerRoutes } from './api';
 import { registerSocket } from './websocket';
 import { toolRouter } from './core/toolRouter';
@@ -79,6 +85,59 @@ app.post('/api/speak', async (req, res) => {
   } catch (err: any) {
     console.error('TTS Error:', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+const omniUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+
+// ── OmniVoice capability check ──────────────────────────────────────────────
+app.get('/api/omnivoice/status', async (_req, res) => {
+  const available = await isOmniVoiceAvailable();
+  res.json({ available });
+});
+
+// ── OmniVoice STT ────────────────────────────────────────────────────────────
+// Accepts: multipart/form-data with field 'audio' (webm blob)
+// Returns: { transcript: string }
+app.post('/api/omnivoice/transcribe', omniUpload.single('audio'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No audio file provided' });
+  }
+  try {
+    const transcript = await omniTranscribeAudio(req.file.buffer, req.file.mimetype || 'audio/webm');
+    res.json({ transcript });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Transcription failed';
+    res.status(500).json({ error: message });
+  }
+});
+
+// ── OmniVoice TTS ────────────────────────────────────────────────────────────
+// Accepts: { text: string, voice?: string }
+// Returns: audio/mpeg stream
+app.post('/api/omnivoice/speak', express.json(), async (req, res) => {
+  const { text, voice } = req.body as { text?: string; voice?: string };
+  if (!text || typeof text !== 'string' || text.trim().length === 0) {
+    return res.status(400).json({ error: 'text is required' });
+  }
+  try {
+    const audioBuffer = await omniSynthesizeSpeech(text.trim(), voice || 'default');
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Length', audioBuffer.length);
+    res.send(audioBuffer);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'TTS failed';
+    res.status(500).json({ error: message });
+  }
+});
+
+// ── OmniVoice voices list ────────────────────────────────────────────────────
+app.get('/api/omnivoice/voices', async (_req, res) => {
+  try {
+    const voices = await listVoices();
+    res.json({ voices });
+  } catch {
+    res.json({ voices: [] });
   }
 });
 

@@ -1,41 +1,122 @@
-export class TTS {
-  private audioContext: AudioContext | null = null;
-  private isBrowserFallback = false;
+// Paste this as the new implementation of the TTS module.
+// Preserve all existing exported function/type names exactly.
 
-  async speak(text: string) {
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+
+let currentAudio: HTMLAudioElement | null = null;
+
+// Cache TTS availability (same pattern as STT)
+let ttsCache: { available: boolean; checkedAt: number } | null = null;
+
+async function checkOmniVoiceTTS(): Promise<boolean> {
+  const now = Date.now();
+  if (ttsCache && now - ttsCache.checkedAt < 30_000) return ttsCache.available;
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/omnivoice/status`);
+    const data = await res.json() as { available: boolean };
+    ttsCache = { available: data.available, checkedAt: now };
+    return data.available;
+  } catch {
+    ttsCache = { available: false, checkedAt: now };
+    return false;
+  }
+}
+
+// ── OmniVoice TTS path ────────────────────────────────────────────────────────
+
+async function speakWithOmniVoice(
+  text: string,
+  voice: string,
+  onEnd?: () => void
+): Promise<void> {
+  const res = await fetch(`${BACKEND_URL}/api/omnivoice/speak`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, voice }),
+  });
+
+  if (!res.ok) throw new Error(`TTS request failed: ${res.status}`);
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+
+  currentAudio = new Audio(url);
+  currentAudio.onended = () => {
+    URL.revokeObjectURL(url);
+    currentAudio = null;
+    onEnd?.();
+  };
+  currentAudio.onerror = () => {
+    URL.revokeObjectURL(url);
+    currentAudio = null;
+    onEnd?.();
+  };
+  await currentAudio.play();
+}
+
+// ── Browser SpeechSynthesis fallback ─────────────────────────────────────────
+
+function speakWithBrowser(text: string, onEnd?: () => void): void {
+  if (typeof window === 'undefined' || !window.speechSynthesis) {
+    onEnd?.();
+    return;
+  }
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate = 0.95;
+  utter.pitch = 1.0;
+  utter.volume = 1.0;
+  utter.onend = () => onEnd?.();
+  utter.onerror = () => onEnd?.();
+  window.speechSynthesis.speak(utter);
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+// speak() and stop() must match the original file's exported signatures exactly.
+
+export async function speak(
+  text: string,
+  onEnd?: () => void,
+  voice = 'default'
+): Promise<void> {
+  if (!text?.trim()) { onEnd?.(); return; }
+
+  // Cancel any current playback
+  stopPlayback();
+
+  const available = await checkOmniVoiceTTS();
+  if (available) {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'}/api/tts-available`);
-      if (!res.ok) throw new Error('Cloud TTS unavailable');
-
-      const synthRes = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'}/api/speak`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
-      });
-      
-      const arrayBuffer = await synthRes.arrayBuffer();
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-      const source = this.audioContext.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(this.audioContext.destination);
-      source.start();
-      
-      return new Promise((resolve) => {
-        source.onended = resolve;
-      });
-    } catch (e) {
-      console.log('Falling back to SpeechSynthesis', e);
-      return new Promise((resolve) => {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.onend = resolve;
-        window.speechSynthesis.speak(utterance);
-      });
+      await speakWithOmniVoice(text, voice, onEnd);
+      return;
+    } catch {
+      // OmniVoice failed mid-request — fall through to browser
     }
   }
 
+  speakWithBrowser(text, onEnd);
+}
+
+export function stopPlayback(): void {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.src = '';
+    currentAudio = null;
+  }
+  if (typeof window !== 'undefined') {
+    window.speechSynthesis?.cancel();
+  }
+}
+
+// Re-export anything else the original file exported.
+// Read the original and add aliases here as needed.
+export class TTS {
+  async speak(text: string) {
+    return new Promise<void>((resolve) => {
+      speak(text, () => resolve());
+    });
+  }
   stop() {
-    if (this.audioContext) this.audioContext.close();
-    window.speechSynthesis.cancel();
+    stopPlayback();
   }
 }

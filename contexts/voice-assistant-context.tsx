@@ -47,6 +47,17 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
       
       await newTts.speak(res.response);
       setIsSpeaking(false);
+    }, (errStr) => {
+      setIsListening(false);
+      let displayError = errStr;
+      try {
+        if (errStr.includes('{')) {
+          const jsonStr = errStr.substring(errStr.indexOf('{'));
+          const parsed = JSON.parse(jsonStr);
+          if (parsed.detail?.message) displayError = parsed.detail.message;
+        }
+      } catch (e) {}
+      setHistory(prev => [...prev, { role: 'assistant', content: `⚠️ STT Error: ${displayError}` }]);
     });
     setStt(newStt);
 

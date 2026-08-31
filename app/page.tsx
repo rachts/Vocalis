@@ -1,8 +1,25 @@
 'use client';
 import { useVoiceAssistant } from '@/contexts/voice-assistant-context';
+import { useState, useEffect } from 'react';
+
+// Small hook to check OmniVoice status
+function useOmniVoiceStatus() {
+  const [available, setAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    fetch(`${BACKEND_URL}/api/omnivoice/status`)
+      .then(r => r.json())
+      .then((d: { available: boolean }) => setAvailable(d.available))
+      .catch(() => setAvailable(false));
+  }, []);
+
+  return available;
+}
 
 export default function Dashboard() {
   const { isListening, isSpeaking, history, startListening, stopListening } = useVoiceAssistant();
+  const omniVoiceAvailable = useOmniVoiceStatus();
 
   return (
     <div className="flex flex-col md:flex-row h-screen w-full bg-[#FAF8F5] text-[#2D2B27] p-8 gap-8 font-sans">
@@ -37,6 +54,27 @@ export default function Dashboard() {
         <p className="mt-8 text-[#8C8579] tracking-widest uppercase text-sm">
           {isListening ? 'Listening...' : isSpeaking ? 'Speaking...' : 'Ready'}
         </p>
+        <div className="absolute bottom-4 flex flex-col items-center">
+          {omniVoiceAvailable === false && (
+            <span className="text-xs text-stone-400 mt-1 text-center">
+              using browser voice · 
+              <a 
+                href="https://github.com/debpalash/OmniVoice-Studio/releases/latest" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="underline ml-1"
+              >
+                install OmniVoice
+              </a>
+              {' '}for better quality
+            </span>
+          )}
+          {omniVoiceAvailable === true && (
+            <span className="text-xs text-stone-400 mt-1">
+              ● OmniVoice active
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Right Column */}
