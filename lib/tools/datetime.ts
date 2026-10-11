@@ -5,5 +5,5 @@ export async function datetimeTool(): Promise<ToolResult> {
     weekday: 'long', year: 'numeric', month: 'long',
     day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
-  return { success: true, data: formatted, spokenSummary: `It's ${formatted}.` };
+  return { success: true, data: { time: formatted }, spokenSummary: `It's ${formatted}.` };
 }

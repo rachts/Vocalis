@@ -29,29 +29,43 @@ async function speakWithOmniVoice(
   voice: string,
   onEnd?: () => void
 ): Promise<void> {
-  const res = await fetch(`${BACKEND_URL}/api/omnivoice/speak`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, voice }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
 
-  if (!res.ok) throw new Error(`TTS request failed: ${res.status}`);
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/omnivoice/speak`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice }),
+      signal: controller.signal,
+    });
 
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
+    clearTimeout(timer);
+    if (!res.ok) throw new Error(`TTS request failed: ${res.status}`);
 
-  currentAudio = new Audio(url);
-  currentAudio.onended = () => {
-    URL.revokeObjectURL(url);
-    currentAudio = null;
-    onEnd?.();
-  };
-  currentAudio.onerror = () => {
-    URL.revokeObjectURL(url);
-    currentAudio = null;
-    onEnd?.();
-  };
-  await currentAudio.play();
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+
+    await new Promise<void>((resolve, reject) => {
+      currentAudio = new Audio(url);
+      currentAudio.onended = () => {
+        URL.revokeObjectURL(url);
+        currentAudio = null;
+        onEnd?.();
+        resolve();
+      };
+      currentAudio.onerror = (e) => {
+        URL.revokeObjectURL(url);
+        currentAudio = null;
+        onEnd?.();
+        reject(e);
+      };
+      currentAudio.play().catch(reject);
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
 }
 
 // ── Browser SpeechSynthesis fallback ─────────────────────────────────────────

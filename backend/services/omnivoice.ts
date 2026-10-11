@@ -59,25 +59,35 @@ export async function synthesizeSpeech(
   text: string,
   voice = 'default'
 ): Promise<Buffer> {
-  const res = await fetch(`${OMNIVOICE_URL}/v1/audio/speech`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'tts-1',         // OmniVoice maps this to its active TTS engine
-      input: text,
-      voice,                  // 'default' or a cloned profile ID from /v1/audio/voices
-      response_format: 'mp3',
-      speed: 1.0,
-    }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`OmniVoice TTS failed: ${res.status} ${errText}`);
+  try {
+    const res = await fetch(`${OMNIVOICE_URL}/v1/audio/speech`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'tts-1',         // OmniVoice maps this to its active TTS engine
+        input: text,
+        voice,                  // 'default' or a cloned profile ID from /v1/audio/voices
+        response_format: 'mp3',
+        speed: 1.0,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timer);
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`OmniVoice TTS failed: ${res.status} ${errText}`);
+    }
+
+    const arrayBuffer = await res.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
   }
-
-  const arrayBuffer = await res.arrayBuffer();
-  return Buffer.from(arrayBuffer);
 }
 
 /**

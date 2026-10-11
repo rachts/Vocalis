@@ -7,8 +7,9 @@ import type { ToolCall } from '@/types/tools';
 
 export async function processCommand(context: AgentContext): Promise<AgentResponse> {
   try {
+    const systemPrompt = buildSystemPrompt();
     const chat = geminiFlash.startChat({
-      systemInstruction: buildSystemPrompt(),
+      systemInstruction: { role: 'system', parts: [{ text: systemPrompt }] },
       history: context.history.map(m => ({
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }]
@@ -21,17 +22,28 @@ export async function processCommand(context: AgentContext): Promise<AgentRespon
 
     if (call) {
       const toolResult = await executeTool({ name: call.name as any, args: call.args as any });
-      result = await chat.sendMessage([{
-        functionResponse: { name: call.name, response: toolResult.data as Record<string, unknown> }
+      const sanitizedResponse =
+        (toolResult.data && typeof toolResult.data === 'object')
+          ? toolResult.data
+          : { result: toolResult.spokenSummary || 'success' };
+
+      const followUp = await chat.sendMessage([{
+        functionResponse: { name: call.name, response: sanitizedResponse as Record<string, unknown> }
       }]);
-      
+
+      let replyText = '';
+      try {
+        replyText = followUp.response.text();
+      } catch {}
+      const finalReply = replyText?.trim() || toolResult.spokenSummary;
+
       await saveMemory(context.sessionId, 'user', context.transcript);
-      await saveMemory(context.sessionId, 'assistant', toolResult.spokenSummary);
+      await saveMemory(context.sessionId, 'assistant', finalReply);
 
       return {
-        response: toolResult.spokenSummary,
+        response: finalReply,
         action: call.name === 'open_url' 
-          ? { type: 'open_url', payload: (toolResult.data as any).url }
+          ? { type: 'open_url', payload: (toolResult.data as any)?.url }
           : undefined
       };
     }
